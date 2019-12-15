@@ -6,20 +6,12 @@ use actix_web::{
 };
 use handlebars::Handlebars;
 use serde::Deserialize;
-use std::collections::BTreeMap;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::{File, OpenOptions};
 use std::io::{Error, Write};
 use std::sync::{Arc, RwLock};
 
-static DEFAULT_CONFIG: &[u8] = br#"
-bind_address: "127.0.0.1:8080"
-public_address: "localhost"
-
-routes:
-    g: "https://google.com/search?q={{query}}"
-"#;
-
+static DEFAULT_CONFIG: &[u8] = include_bytes!("../bunbun.default.toml");
 static CONFIG_FILE: &str = "bunbun.toml";
 
 #[get("/ls")]

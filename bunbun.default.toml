@@ -11,5 +11,4 @@ routes:
   # Google
   g: "https://google.com/search?q={{query}}"
   yt: "https://www.youtube.com/results?search_query={{query}}"
-  # Searches
-  na: "https://nyaa.si/?f=0&c=1_2&q={{query}}"
+  r: "https://reddit.com/r/{{query}}"

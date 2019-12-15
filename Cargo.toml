@@ -4,7 +4,8 @@ version = "0.1.0"
 authors = ["Edward Shen <code@eddie.sh>"]
 edition = "2018"
 description = "Re-implementation of bunny1 in Rust"
-publish = false
+license = "AGPL-3.0"
+readme = "README.md"
 
 [dependencies]
 actix-web = "1.0"
