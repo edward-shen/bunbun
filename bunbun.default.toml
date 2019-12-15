@@ -1,6 +1,11 @@
+# The location which your server is listening on and binds to
 bind_address: "127.0.0.1:8080"
+
+# The root location where people can access your instance of bunbun
 public_address: "localhost:8080"
 
+# A default route, if no route is was matched. If none were matched, the entire
+# query is used as the query for the default route. This field is optional.
 default_route: "g"
 
 routes:

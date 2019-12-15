@@ -25,5 +25,23 @@ If you have `cargo`, you can simply run `cargo install bunbun`.
 Once installed, simply run it. A default config file will be created if one does
 not exist. You should model your own custom routes after the provided ones.
 
+### Configuration
+
+If configuring for development, no further configuration is required. If running
+this for production, you should edit the `public_address` field.
+
+### Adding bunbun as a search engine
+
+bunbun supports the [OpenSearch Description Format][osdf].
+
+For Chrome, simply visiting the index page will auto add bunbun as a search
+engine. You simply need to set it as a default in your preferences.
+
+For Firefox, you need to explicitly add bunbun as a search engine. This can be
+done by clicking the three dots next to the star button on the url box, and
+clicking on "Add Search Engine". Then, you can set it as your default search
+engine.
+
 [rust-lang]: https://www.rust-lang.org/
 [bunny1]: http://www.bunny1.org/
+[osdf]: https://developer.mozilla.org/en-US/docs/Web/OpenSearch
