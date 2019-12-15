@@ -13,4 +13,3 @@ routes:
   yt: "https://www.youtube.com/results?search_query={{query}}"
   # Searches
   na: "https://nyaa.si/?f=0&c=1_2&q={{query}}"
-  #

@@ -20,25 +20,32 @@ routes:
     g: "https://google.com/search?q={{query}}"
 "#;
 
+static CONFIG_FILE: &str = "bunbun.toml";
+
+#[get("/ls")]
+fn list(data: Data<Arc<State>>) -> impl Responder {
+    HttpResponse::Ok().body(
+        data.renderer
+            .read()
+            .unwrap()
+            .render("list", &data.routes)
+            .unwrap(),
+    )
+}
+
 #[derive(Deserialize)]
 struct SearchQuery {
     to: String,
 }
 
-#[get("/ls")]
-fn list(data: Data<Arc<State>>) -> impl Responder {
-    let mut resp = String::new();
-    for (k, v) in data.routes.iter() {
-        resp.push_str(&format!("{}: {}\n", k, v));
-    }
-    HttpResponse::Ok().body(resp)
-}
-
 #[get("/hop")]
 fn hop(data: Data<Arc<State>>, query: Query<SearchQuery>) -> impl Responder {
-    let reg = Handlebars::new();
     let mut raw_args = query.to.split_ascii_whitespace();
     let command = raw_args.next();
+
+    if command.is_none() {
+        return HttpResponse::NotFound().body("not found");
+    }
 
     // Reform args into url-safe string (probably want to go thru an actual parser)
     let mut args = String::new();
@@ -50,10 +57,6 @@ fn hop(data: Data<Arc<State>>, query: Query<SearchQuery>) -> impl Responder {
         }
     }
 
-    if command.is_none() {
-        return HttpResponse::NotFound().body("not found");
-    }
-
     let mut template_args = HashMap::new();
     template_args.insert("query", args);
 
@@ -61,7 +64,11 @@ fn hop(data: Data<Arc<State>>, query: Query<SearchQuery>) -> impl Responder {
         Some(template) => HttpResponse::Found()
             .header(
                 header::LOCATION,
-                reg.render_template(template, &template_args).unwrap(),
+                data.renderer
+                    .read()
+                    .unwrap()
+                    .render_template(template, &template_args)
+                    .unwrap(),
             )
             .finish(),
         None => match &data.default_route {
@@ -77,7 +84,10 @@ fn hop(data: Data<Arc<State>>, query: Query<SearchQuery>) -> impl Responder {
                 HttpResponse::Found()
                     .header(
                         header::LOCATION,
-                        reg.render_template(data.routes.get(route).unwrap(), &template_args)
+                        data.renderer
+                            .read()
+                            .unwrap()
+                            .render_template(data.routes.get(route).unwrap(), &template_args)
                             .unwrap(),
                     )
                     .finish()
@@ -126,7 +136,7 @@ struct State {
 }
 
 fn main() -> Result<(), Error> {
-    let config_file = match File::open("bunbun.toml") {
+    let config_file = match File::open(CONFIG_FILE) {
         Ok(file) => file,
         Err(_) => {
             eprintln!("Unable to find a bunbun.toml file. Creating default!");
@@ -136,7 +146,7 @@ fn main() -> Result<(), Error> {
                 .open("bunbun.toml")
                 .expect("Unable to write to directory!");
             fd.write_all(DEFAULT_CONFIG)?;
-            File::open("bunbun.toml")?
+            File::open(CONFIG_FILE)?
         }
     };
 
@@ -173,6 +183,12 @@ fn compile_templates() -> Handlebars {
         .register_template_string(
             "opensearch",
             String::from_utf8_lossy(include_bytes!("templates/bunbunsearch.xml")),
+        )
+        .unwrap();
+    handlebars
+        .register_template_string(
+            "list",
+            String::from_utf8_lossy(include_bytes!("templates/list.hbs")),
         )
         .unwrap();
     handlebars
