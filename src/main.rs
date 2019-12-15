@@ -91,7 +91,15 @@ fn hop(data: Data<Arc<State>>, query: Query<SearchQuery>) -> impl Responder {
 
 #[get("/")]
 fn index(data: Data<Arc<State>>) -> impl Responder {
-    HttpResponse::Ok().body(data.renderer.read().unwrap().render("index", &()).unwrap())
+    let mut template_args = HashMap::new();
+    template_args.insert("hostname", &data.public_address);
+    HttpResponse::Ok().body(
+        data.renderer
+            .read()
+            .unwrap()
+            .render("index", &template_args)
+            .unwrap(),
+    )
 }
 
 #[get("/bunbunsearch.xml")]

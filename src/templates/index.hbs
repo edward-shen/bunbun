@@ -1,12 +1,52 @@
 <!DOCTYPE html>
 <html>
   <head>
-  <link rel="search"
-        type="application/opensearchdescription+xml"
-        title="bunbun"
-        href="bunbunsearch.xml">
+    <title>Bunbun</title>
+    <style type="text/css">
+      body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        background-color: #212121;
+        color: #fff;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      }
+      h1, p { margin: 0; }
+      main { display: flex; }
+      a { color: white; }
+    </style>
+    <link rel="search"
+          type="application/opensearchdescription+xml"
+          title="bunbun"
+          href="bunbunsearch.xml">
   </head>
   <body>
-    hello world
+    <h1>Bunbun</h1>
+    <p>Thanks for installing bunbun! To setup bunbun for your web browser, follow these steps:</p>
+    <main>
+      <section>
+        <h2>Firefox</h2>
+        <ol>
+          <li>
+            Click the following button:
+            <button onclick="window.external.AddSearchProvider('http://{{hostname}}/bunbunsearch.xml')">
+              Add search engine
+            </button>
+          </li>
+          <li>Type in "about:preferences#search" in the address bar and hit Enter.</li>
+          <li>Set your default search engine to bunbun.</li>
+        </ol>
+      </section>
+      <section>
+        <h2>Chrome</h2>
+        <ol>
+          <li>Type in "chrome://settings/search" in the address bar and hit Enter.</li>
+          <li>Select "Manage search engines"</li>
+          <li>Search for "bunbun"</li>
+          <li>Select the three dots on the bunbun entry, and select "Make default"</li>
+        </ol>
+      </section>
+    </main>
+    <p>To view a full list of commands, check out the <a href="/ls">command list</a>.</p>
   </body>
 </html>
