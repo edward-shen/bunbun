@@ -1,0 +1,9 @@
+<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/"
+                       xmlns:moz="http://www.mozilla.org/2006/browser/search/">
+  <ShortName>bunbun</ShortName>
+  <Description>Hop to where you need to go</Description>
+  <InputEncoding>UTF-8</InputEncoding>
+  <!--<Image width="16" height="16">data:image/x-icon;base64,</Image>-->
+  <Url type="text/html" template="http://{{hostname}}/hop?to={searchTerms}"></Url>
+  <Url type="application/x-moz-keywordsearch" template="http://{{hostname}}/hop?to={searchTerms}"></Url>
+</OpenSearchDescription>
