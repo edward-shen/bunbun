@@ -1,0 +1,8 @@
+bind_address: "127.0.0.1:8080"
+
+routes:
+  # Meta
+  ls: "/ls"
+  # Google
+  g: "https://google.com/search?q={{query}}"
+  yt: "https://www.youtube.com/results?search_query={{query}}"

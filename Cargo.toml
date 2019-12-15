@@ -1,0 +1,13 @@
+[package]
+name = "bunbun"
+version = "0.1.0"
+authors = ["Edward Shen <code@eddie.sh>"]
+edition = "2018"
+description = "Re-implementation of bunny1 in Rust"
+publish = false
+
+[dependencies]
+actix-web = "1.0"
+serde = "1.0"
+serde_yaml = "0.8"
+handlebars = "2.0"
