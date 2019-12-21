@@ -140,7 +140,7 @@ fn main() -> Result<(), Error> {
         public_address: conf.public_address,
         default_route: conf.default_route,
         routes: conf.routes,
-        renderer: renderer,
+        renderer,
     }));
     let state_ref = state.clone();
 
