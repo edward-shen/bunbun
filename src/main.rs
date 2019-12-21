@@ -21,12 +21,14 @@ static CONFIG_FILE: &str = "bunbun.toml";
 #[derive(Debug)]
 enum BunBunError {
   IoError(std::io::Error),
+  ParseError(serde_yaml::Error),
 }
 
 impl fmt::Display for BunBunError {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match self {
       BunBunError::IoError(e) => e.fmt(f),
+      BunBunError::ParseError(e) => e.fmt(f),
     }
   }
 }
@@ -36,6 +38,12 @@ impl Error for BunBunError {}
 impl From<std::io::Error> for BunBunError {
   fn from(error: std::io::Error) -> Self {
     BunBunError::IoError(error)
+  }
+}
+
+impl From<serde_yaml::Error> for BunBunError {
+  fn from(error: serde_yaml::Error) -> Self {
+    BunBunError::ParseError(error)
   }
 }
 
@@ -162,10 +170,14 @@ fn main() -> Result<(), BunBunError> {
     .watch(CONFIG_FILE, move |e: Event| {
       if let Event::Write(_) = e {
         let mut state = state.write().unwrap();
-        let conf = read_config(CONFIG_FILE).unwrap();
-        state.public_address = conf.public_address;
-        state.default_route = conf.default_route;
-        state.routes = conf.routes;
+        match read_config(CONFIG_FILE) {
+          Ok(conf) => {
+            state.public_address = conf.public_address;
+            state.default_route = conf.default_route;
+            state.routes = conf.routes;
+          }
+          Err(e) => eprintln!("Config is malformed: {}", e),
+        }
       }
     })
     .expect("failed to watch");
@@ -201,8 +213,7 @@ fn read_config(config_file_path: &str) -> Result<Config, BunBunError> {
       File::open(config_file_path)?
     }
   };
-  // TODO: Handle parse failure
-  Ok(serde_yaml::from_reader(config_file).unwrap())
+  Ok(serde_yaml::from_reader(config_file)?)
 }
 
 fn compile_templates() -> Handlebars {
