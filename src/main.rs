@@ -8,13 +8,36 @@ use handlebars::Handlebars;
 use hotwatch::{Event, Hotwatch};
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap};
+use std::error::Error;
+use std::fmt;
 use std::fs::{File, OpenOptions};
-use std::io::{Error, Write};
+use std::io::Write;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 static DEFAULT_CONFIG: &[u8] = include_bytes!("../bunbun.default.toml");
 static CONFIG_FILE: &str = "bunbun.toml";
+
+#[derive(Debug)]
+enum BunBunError {
+  IoError(std::io::Error),
+}
+
+impl fmt::Display for BunBunError {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    match self {
+      BunBunError::IoError(e) => e.fmt(f),
+    }
+  }
+}
+
+impl Error for BunBunError {}
+
+impl From<std::io::Error> for BunBunError {
+  fn from(error: std::io::Error) -> Self {
+    BunBunError::IoError(error)
+  }
+}
 
 #[get("/ls")]
 fn list(data: Data<Arc<RwLock<State>>>) -> impl Responder {
@@ -121,7 +144,7 @@ struct State {
   renderer: Handlebars,
 }
 
-fn main() -> Result<(), Error> {
+fn main() -> Result<(), BunBunError> {
   let conf = read_config(CONFIG_FILE)?;
   let renderer = compile_templates();
   let state = Arc::from(RwLock::new(State {
@@ -156,10 +179,12 @@ fn main() -> Result<(), Error> {
       .service(opensearch)
   })
   .bind(&conf.bind_address)?
-  .run()
+  .run()?;
+
+  Ok(())
 }
 
-fn read_config(config_file_path: &str) -> Result<Config, Error> {
+fn read_config(config_file_path: &str) -> Result<Config, BunBunError> {
   let config_file = match File::open(config_file_path) {
     Ok(file) => file,
     Err(_) => {
@@ -176,6 +201,7 @@ fn read_config(config_file_path: &str) -> Result<Config, Error> {
       File::open(config_file_path)?
     }
   };
+  // TODO: Handle parse failure
   Ok(serde_yaml::from_reader(config_file).unwrap())
 }
 
