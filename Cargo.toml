@@ -13,6 +13,7 @@ actix-web = "1.0"
 serde = "1.0"
 serde_yaml = "0.8"
 handlebars = "2.0"
+hotwatch = "0.4.3"
 
 [profile.release]
 lto = true
