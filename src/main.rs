@@ -234,13 +234,7 @@ fn compile_templates() -> Handlebars {
     };
   }
 
-  register_template!("index", "list");
+  register_template!("index", "list", "opensearch");
 
-  handlebars
-    .register_template_string(
-      "opensearch",
-      String::from_utf8_lossy(include_bytes!(concat!("templates/", "bunbunsearch.xml"))),
-    )
-    .unwrap();
   handlebars
 }
