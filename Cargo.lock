@@ -358,7 +358,7 @@ dependencies = [
 
 [[package]]
 name = "bunbun"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "actix-web 1.0.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "handlebars 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
