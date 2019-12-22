@@ -22,6 +22,7 @@ static CONFIG_FILE: &str = "bunbun.toml";
 enum BunBunError {
   IoError(std::io::Error),
   ParseError(serde_yaml::Error),
+  WatchError(hotwatch::Error),
 }
 
 impl fmt::Display for BunBunError {
@@ -29,23 +30,26 @@ impl fmt::Display for BunBunError {
     match self {
       BunBunError::IoError(e) => e.fmt(f),
       BunBunError::ParseError(e) => e.fmt(f),
+      BunBunError::WatchError(e) => e.fmt(f),
     }
   }
 }
 
 impl Error for BunBunError {}
 
-impl From<std::io::Error> for BunBunError {
-  fn from(error: std::io::Error) -> Self {
-    BunBunError::IoError(error)
-  }
+macro_rules! from_error {
+  ($from:ty, $to:ident) => {
+    impl From<$from> for BunBunError {
+      fn from(e: $from) -> Self {
+        BunBunError::$to(e)
+      }
+    }
+  };
 }
 
-impl From<serde_yaml::Error> for BunBunError {
-  fn from(error: serde_yaml::Error) -> Self {
-    BunBunError::ParseError(error)
-  }
-}
+from_error!(std::io::Error, IoError);
+from_error!(serde_yaml::Error, ParseError);
+from_error!(hotwatch::Error, WatchError);
 
 #[get("/ls")]
 fn list(data: Data<Arc<RwLock<State>>>) -> impl Responder {
@@ -163,24 +167,21 @@ fn main() -> Result<(), BunBunError> {
   }));
   let state_ref = state.clone();
 
-  let mut watch =
-    Hotwatch::new_with_custom_delay(Duration::from_millis(500)).expect("Failed to init watch");
+  let mut watch = Hotwatch::new_with_custom_delay(Duration::from_millis(500))?;
 
-  watch
-    .watch(CONFIG_FILE, move |e: Event| {
-      if let Event::Write(_) = e {
-        let mut state = state.write().unwrap();
-        match read_config(CONFIG_FILE) {
-          Ok(conf) => {
-            state.public_address = conf.public_address;
-            state.default_route = conf.default_route;
-            state.routes = conf.routes;
-          }
-          Err(e) => eprintln!("Config is malformed: {}", e),
+  watch.watch(CONFIG_FILE, move |e: Event| {
+    if let Event::Write(_) = e {
+      let mut state = state.write().unwrap();
+      match read_config(CONFIG_FILE) {
+        Ok(conf) => {
+          state.public_address = conf.public_address;
+          state.default_route = conf.default_route;
+          state.routes = conf.routes;
         }
+        Err(e) => eprintln!("Config is malformed: {}", e),
       }
-    })
-    .expect("failed to watch");
+    }
+  })?;
 
   HttpServer::new(move || {
     App::new()
@@ -218,22 +219,27 @@ fn read_config(config_file_path: &str) -> Result<Config, BunBunError> {
 
 fn compile_templates() -> Handlebars {
   let mut handlebars = Handlebars::new();
-  handlebars
-    .register_template_string(
-      "index",
-      String::from_utf8_lossy(include_bytes!("templates/index.hbs")),
-    )
-    .unwrap();
+
+  macro_rules! register_template {
+    ( $( $template:expr ),* ) => {
+      $(
+        handlebars
+          .register_template_string(
+            $template,
+            String::from_utf8_lossy(
+              include_bytes!(concat!("templates/", $template, ".hbs")))
+          )
+          .unwrap();
+      )*
+    };
+  }
+
+  register_template!("index", "list");
+
   handlebars
     .register_template_string(
       "opensearch",
-      String::from_utf8_lossy(include_bytes!("templates/bunbunsearch.xml")),
-    )
-    .unwrap();
-  handlebars
-    .register_template_string(
-      "list",
-      String::from_utf8_lossy(include_bytes!("templates/list.hbs")),
+      String::from_utf8_lossy(include_bytes!(concat!("templates/", "bunbunsearch.xml"))),
     )
     .unwrap();
   handlebars
