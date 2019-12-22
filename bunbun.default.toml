@@ -1,4 +1,5 @@
-# The location which your server is listening on and binds to
+# The location which your server is listening on and binds to. You must restart
+# bunbun for changes to take effect for this config option.
 bind_address: "127.0.0.1:8080"
 
 # The root location where people can access your instance of bunbun

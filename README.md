@@ -30,17 +30,14 @@ not exist. You should model your own custom routes after the provided ones.
 If configuring for development, no further configuration is required. If running
 this for production, you should edit the `public_address` field.
 
+the config file is watched, so updates are immediate unless invalid, or if
+you're using certain programs such as nvim, which performs updating a file via
+swapping rather than directly updating the file.
+
 ### Adding bunbun as a search engine
 
-bunbun supports the [OpenSearch Description Format][osdf].
-
-For Chrome, simply visiting the index page will auto add bunbun as a search
-engine. You simply need to set it as a default in your preferences.
-
-For Firefox, you need to explicitly add bunbun as a search engine. This can be
-done by clicking the three dots next to the star button on the url box, and
-clicking on "Add Search Engine". Then, you can set it as your default search
-engine.
+bunbun supports the [OpenSearch Description Format][osdf]. Visit the root page
+of your desired instance of bunbun to learn more.
 
 [rust-lang]: https://www.rust-lang.org/
 [bunny1]: http://www.bunny1.org/
