@@ -9,9 +9,9 @@ use hotwatch::{Event, Hotwatch};
 use itertools::Itertools;
 use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use serde::Deserialize;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::fmt;
-use std::fs::{File, OpenOptions};
+use std::fs::{read_to_string, OpenOptions};
 use std::io::Write;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
@@ -104,7 +104,7 @@ fn hop(
 /// returns the remaining arguments. If none remain, an empty string is given.
 fn resolve_hop(
   query: &str,
-  routes: &BTreeMap<String, String>,
+  routes: &HashMap<String, String>,
   default_route: &Option<String>,
 ) -> (Option<String>, String) {
   let mut split_args = query.split_ascii_whitespace().peekable();
@@ -157,7 +157,7 @@ fn opensearch(data: Data<Arc<RwLock<State>>>) -> impl Responder {
 struct State {
   public_address: String,
   default_route: Option<String>,
-  routes: BTreeMap<String, String>,
+  routes: HashMap<String, String>,
   renderer: Handlebars,
 }
 
@@ -207,14 +207,14 @@ struct Config {
   bind_address: String,
   public_address: String,
   default_route: Option<String>,
-  routes: BTreeMap<String, String>,
+  routes: HashMap<String, String>,
 }
 
 /// Attempts to read the config file. If it doesn't exist, generate one a
 /// default config file before attempting to parse it.
 fn read_config(config_file_path: &str) -> Result<Config, BunBunError> {
-  let config_file = match File::open(config_file_path) {
-    Ok(file) => file,
+  let config_str = match read_to_string(config_file_path) {
+    Ok(conf_str) => conf_str,
     Err(_) => {
       eprintln!(
         "Unable to find a {} file. Creating default!",
@@ -226,10 +226,13 @@ fn read_config(config_file_path: &str) -> Result<Config, BunBunError> {
         .open(config_file_path)
         .expect("Unable to write to directory!");
       fd.write_all(DEFAULT_CONFIG)?;
-      File::open(config_file_path)?
+      String::from_utf8_lossy(DEFAULT_CONFIG).into_owned()
     }
   };
-  Ok(serde_yaml::from_reader(config_file)?)
+
+  // Reading from memory is faster than reading directly from a reader for some
+  // reason; see https://github.com/serde-rs/json/issues/160
+  Ok(serde_yaml::from_str(&config_str)?)
 }
 
 /// Returns an instance with all pre-generated templates included into the
