@@ -16,6 +16,8 @@ use std::io::Write;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
+mod template_args;
+
 /// https://url.spec.whatwg.org/#fragment-percent-encode-set
 static FRAGMENT_ENCODE_SET: &AsciiSet =
   &CONTROLS.add(b' ').add(b'"').add(b'<').add(b'>').add(b'`');
@@ -75,23 +77,20 @@ fn hop(
   let data = data.read().unwrap();
 
   match resolve_hop(&query.to, &data.routes, &data.default_route) {
-    (Some(path), args) => {
-      let mut template_args = HashMap::new();
-      template_args.insert(
-        "query",
-        utf8_percent_encode(&args, FRAGMENT_ENCODE_SET).to_string(),
-      );
-
-      HttpResponse::Found()
-        .header(
-          header::LOCATION,
-          data
-            .renderer
-            .render_template(&path, &template_args)
-            .unwrap(),
-        )
-        .finish()
-    }
+    (Some(path), args) => HttpResponse::Found()
+      .header(
+        header::LOCATION,
+        data
+          .renderer
+          .render_template(
+            &path,
+            &template_args::query(
+              utf8_percent_encode(&args, FRAGMENT_ENCODE_SET).to_string(),
+            ),
+          )
+          .unwrap(),
+      )
+      .finish(),
     (None, _) => HttpResponse::NotFound().body("not found"),
   }
 }
@@ -133,23 +132,34 @@ fn resolve_hop(
 #[get("/")]
 fn index(data: Data<Arc<RwLock<State>>>) -> impl Responder {
   let data = data.read().unwrap();
-  let mut template_args = HashMap::new();
-  template_args.insert("hostname", &data.public_address);
-  HttpResponse::Ok()
-    .body(data.renderer.render("index", &template_args).unwrap())
+  HttpResponse::Ok().body(
+    data
+      .renderer
+      .render(
+        "index",
+        &template_args::hostname(data.public_address.clone()),
+      )
+      .unwrap(),
+  )
 }
 
 #[get("/bunbunsearch.xml")]
 fn opensearch(data: Data<Arc<RwLock<State>>>) -> impl Responder {
   let data = data.read().unwrap();
-  let mut template_args = HashMap::new();
-  template_args.insert("hostname", &data.public_address);
   HttpResponse::Ok()
     .header(
       header::CONTENT_TYPE,
       "application/opensearchdescription+xml",
     )
-    .body(data.renderer.render("opensearch", &template_args).unwrap())
+    .body(
+      data
+        .renderer
+        .render(
+          "opensearch",
+          &template_args::hostname(data.public_address.clone()),
+        )
+        .unwrap(),
+    )
 }
 
 /// Dynamic variables that either need to be present at runtime, or can be
