@@ -8,7 +8,6 @@ use handlebars::Handlebars;
 use hotwatch::{Event, Hotwatch};
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap};
-use std::error::Error;
 use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io::Write;
@@ -35,8 +34,8 @@ impl fmt::Display for BunBunError {
   }
 }
 
-impl Error for BunBunError {}
-
+/// Generates a from implementation from the specified type to the provided
+/// bunbun error.
 macro_rules! from_error {
   ($from:ty, $to:ident) => {
     impl From<$from> for BunBunError {
@@ -63,7 +62,10 @@ struct SearchQuery {
 }
 
 #[get("/hop")]
-fn hop(data: Data<Arc<RwLock<State>>>, query: Query<SearchQuery>) -> impl Responder {
+fn hop(
+  data: Data<Arc<RwLock<State>>>,
+  query: Query<SearchQuery>,
+) -> impl Responder {
   let data = data.read().unwrap();
   let mut raw_args = query.to.split_ascii_whitespace();
   let command = raw_args.next();
@@ -125,7 +127,8 @@ fn index(data: Data<Arc<RwLock<State>>>) -> impl Responder {
   let data = data.read().unwrap();
   let mut template_args = HashMap::new();
   template_args.insert("hostname", &data.public_address);
-  HttpResponse::Ok().body(data.renderer.render("index", &template_args).unwrap())
+  HttpResponse::Ok()
+    .body(data.renderer.render("index", &template_args).unwrap())
 }
 
 #[get("/bunbunsearch.xml")]
@@ -141,14 +144,8 @@ fn opensearch(data: Data<Arc<RwLock<State>>>) -> impl Responder {
     .body(data.renderer.render("opensearch", &template_args).unwrap())
 }
 
-#[derive(Deserialize)]
-struct Config {
-  bind_address: String,
-  public_address: String,
-  default_route: Option<String>,
-  routes: BTreeMap<String, String>,
-}
-
+/// Dynamic variables that either need to be present at runtime, or can be
+/// changed during runtime.
 struct State {
   public_address: String,
   default_route: Option<String>,
@@ -197,6 +194,16 @@ fn main() -> Result<(), BunBunError> {
   Ok(())
 }
 
+#[derive(Deserialize)]
+struct Config {
+  bind_address: String,
+  public_address: String,
+  default_route: Option<String>,
+  routes: BTreeMap<String, String>,
+}
+
+/// Attempts to read the config file. If it doesn't exist, generate one a
+/// default config file before attempting to parse it.
 fn read_config(config_file_path: &str) -> Result<Config, BunBunError> {
   let config_file = match File::open(config_file_path) {
     Ok(file) => file,
@@ -217,11 +224,13 @@ fn read_config(config_file_path: &str) -> Result<Config, BunBunError> {
   Ok(serde_yaml::from_reader(config_file)?)
 }
 
+/// Returns an instance with all pre-generated templates included into the
+/// binary. This allows for users to have a portable binary without needed the
+/// templates at runtime.
 fn compile_templates() -> Handlebars {
   let mut handlebars = Handlebars::new();
-
   macro_rules! register_template {
-    ( $( $template:expr ),* ) => {
+    [ $( $template:expr ),* ] => {
       $(
         handlebars
           .register_template_string(
@@ -233,8 +242,6 @@ fn compile_templates() -> Handlebars {
       )*
     };
   }
-
-  register_template!("index", "list", "opensearch");
-
+  register_template!["index", "list", "opensearch"];
   handlebars
 }
