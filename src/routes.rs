@@ -11,8 +11,13 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 /// https://url.spec.whatwg.org/#fragment-percent-encode-set
-static FRAGMENT_ENCODE_SET: &AsciiSet =
-  &CONTROLS.add(b' ').add(b'"').add(b'<').add(b'>').add(b'`');
+static FRAGMENT_ENCODE_SET: &AsciiSet = &CONTROLS
+  .add(b' ')
+  .add(b'"')
+  .add(b'<')
+  .add(b'>')
+  .add(b'`')
+  .add(b'+');
 
 #[get("/ls")]
 pub fn list(data: Data<Arc<RwLock<State>>>) -> impl Responder {
