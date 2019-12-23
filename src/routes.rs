@@ -5,6 +5,7 @@ use actix_web::http::header;
 use actix_web::web::{Data, Query};
 use actix_web::{HttpResponse, Responder};
 use itertools::Itertools;
+use log::debug;
 use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -70,7 +71,10 @@ fn resolve_hop(
   let mut split_args = query.split_ascii_whitespace().peekable();
   let command = match split_args.peek() {
     Some(command) => command,
-    None => return (None, String::new()),
+    None => {
+      debug!("Found empty query, returning no route.");
+      return (None, String::new());
+    }
   };
 
   match (routes.get(*command), default_route) {
@@ -79,14 +83,28 @@ fn resolve_hop(
       Some(resolved.clone()),
       match split_args.next() {
         // Discard the first result, we found the route using the first arg
-        Some(_) => split_args.join(" "),
-        None => String::new(),
+        Some(_) => {
+          let args = split_args.join(" ");
+          debug!("Resolved {} with args {}", resolved, args);
+          args
+        }
+        None => {
+          debug!("Resolved {} with no args", resolved);
+          String::new()
+        }
       },
     ),
     // Unable to find route, but had a default route
-    (None, Some(route)) => (routes.get(route).cloned(), split_args.join(" ")),
+    (None, Some(route)) => {
+      let args = split_args.join(" ");
+      debug!("Using default route {} with args {}", route, args);
+      (routes.get(route).cloned(), args)
+    }
     // No default route and no match
-    (None, None) => (None, String::new()),
+    (None, None) => {
+      debug!("Failed to resolve route!");
+      (None, String::new())
+    }
   }
 }
 

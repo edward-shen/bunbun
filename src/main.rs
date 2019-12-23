@@ -1,6 +1,9 @@
+use actix_web::middleware::Logger;
 use actix_web::{App, HttpServer};
 use handlebars::Handlebars;
 use hotwatch::{Event, Hotwatch};
+use libc::daemon;
+use log::{debug, error, info, trace, warn};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fmt;
@@ -21,6 +24,7 @@ enum BunBunError {
   IoError(std::io::Error),
   ParseError(serde_yaml::Error),
   WatchError(hotwatch::Error),
+  LoggerInitError(log::SetLoggerError),
 }
 
 impl fmt::Display for BunBunError {
@@ -29,6 +33,7 @@ impl fmt::Display for BunBunError {
       BunBunError::IoError(e) => e.fmt(f),
       BunBunError::ParseError(e) => e.fmt(f),
       BunBunError::WatchError(e) => e.fmt(f),
+      BunBunError::LoggerInitError(e) => e.fmt(f),
     }
   }
 }
@@ -48,6 +53,7 @@ macro_rules! from_error {
 from_error!(std::io::Error, IoError);
 from_error!(serde_yaml::Error, ParseError);
 from_error!(hotwatch::Error, WatchError);
+from_error!(log::SetLoggerError, LoggerInitError);
 
 /// Dynamic variables that either need to be present at runtime, or can be
 /// changed during runtime.
@@ -59,6 +65,9 @@ pub struct State {
 }
 
 fn main() -> Result<(), BunBunError> {
+  simple_logger::init_with_level(log::Level::Info)?;
+  // simple_logger::init()?;
+
   let conf = read_config(CONFIG_FILE)?;
   let renderer = compile_templates();
   let state = Arc::from(RwLock::new(State {
@@ -73,21 +82,33 @@ fn main() -> Result<(), BunBunError> {
 
   watch.watch(CONFIG_FILE, move |e: Event| {
     if let Event::Write(_) = e {
+      trace!("Grabbing writer lock on state...");
       let mut state = state.write().unwrap();
+      trace!("Obtained writer lock on state!");
       match read_config(CONFIG_FILE) {
         Ok(conf) => {
           state.public_address = conf.public_address;
           state.default_route = conf.default_route;
           state.routes = conf.routes;
+          info!("Successfully updated active state");
         }
-        Err(e) => eprintln!("Config is malformed: {}", e),
+        Err(e) => warn!("Failed to update config file: {}", e),
       }
+    } else {
+      debug!("Saw event {:#?} but ignored it", e);
     }
   })?;
+
+  info!("Watcher is now watching {}", CONFIG_FILE);
+
+  // unsafe {
+  //   daemon(0, 0);
+  // }
 
   HttpServer::new(move || {
     App::new()
       .data(state_ref.clone())
+      .wrap(Logger::default())
       .service(routes::hop)
       .service(routes::list)
       .service(routes::index)
@@ -110,19 +131,30 @@ struct Config {
 /// Attempts to read the config file. If it doesn't exist, generate one a
 /// default config file before attempting to parse it.
 fn read_config(config_file_path: &str) -> Result<Config, BunBunError> {
+  trace!("Loading config file...");
   let config_str = match read_to_string(config_file_path) {
-    Ok(conf_str) => conf_str,
+    Ok(conf_str) => {
+      debug!("Successfully loaded config file into memory.");
+      conf_str
+    }
     Err(_) => {
-      eprintln!(
+      info!(
         "Unable to find a {} file. Creating default!",
         config_file_path
       );
-      let mut fd = OpenOptions::new()
+
+      let fd = OpenOptions::new()
         .write(true)
         .create_new(true)
-        .open(config_file_path)
-        .expect("Unable to write to directory!");
-      fd.write_all(DEFAULT_CONFIG)?;
+        .open(config_file_path);
+
+      match fd {
+        Ok(mut fd) => fd.write_all(DEFAULT_CONFIG)?,
+        Err(e) => {
+          error!("Failed to write to {}: {}. Default config will be loaded but not saved.", config_file_path, e);
+        }
+      };
+
       String::from_utf8_lossy(DEFAULT_CONFIG).into_owned()
     }
   };
@@ -147,6 +179,7 @@ fn compile_templates() -> Handlebars {
               include_bytes!(concat!("templates/", $template, ".hbs")))
           )
           .unwrap();
+        debug!("Loaded {} template.", $template);
       )*
     };
   }
