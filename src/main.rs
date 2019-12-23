@@ -6,6 +6,8 @@ use actix_web::{
 };
 use handlebars::Handlebars;
 use hotwatch::{Event, Hotwatch};
+use itertools::Itertools;
+use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
@@ -14,10 +16,14 @@ use std::io::Write;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
+/// https://url.spec.whatwg.org/#fragment-percent-encode-set
+static FRAGMENT_ENCODE_SET: &AsciiSet =
+  &CONTROLS.add(b' ').add(b'"').add(b'<').add(b'>').add(b'`');
 static DEFAULT_CONFIG: &[u8] = include_bytes!("../bunbun.default.toml");
 static CONFIG_FILE: &str = "bunbun.toml";
 
 #[derive(Debug)]
+#[allow(clippy::enum_variant_names)]
 enum BunBunError {
   IoError(std::io::Error),
   ParseError(serde_yaml::Error),
@@ -67,58 +73,60 @@ fn hop(
   query: Query<SearchQuery>,
 ) -> impl Responder {
   let data = data.read().unwrap();
-  let mut raw_args = query.to.split_ascii_whitespace();
-  let command = raw_args.next();
 
-  if command.is_none() {
-    return HttpResponse::NotFound().body("not found");
-  }
+  match resolve_hop(&query.to, &data.routes, &data.default_route) {
+    (Some(path), args) => {
+      let mut template_args = HashMap::new();
+      template_args.insert(
+        "query",
+        utf8_percent_encode(&args, FRAGMENT_ENCODE_SET).to_string(),
+      );
 
-  // Reform args into url-safe string (probably want to go thru an actual parser)
-  let mut args = String::new();
-  if let Some(first_arg) = raw_args.next() {
-    args.push_str(first_arg);
-    for arg in raw_args {
-      args.push_str("+");
-      args.push_str(arg);
+      HttpResponse::Found()
+        .header(
+          header::LOCATION,
+          data
+            .renderer
+            .render_template(&path, &template_args)
+            .unwrap(),
+        )
+        .finish()
     }
+    (None, _) => HttpResponse::NotFound().body("not found"),
   }
+}
 
-  let mut template_args = HashMap::new();
-  template_args.insert("query", args);
+/// Attempts to resolve the provided string into its route and its arguments.
+/// If a default route was provided, then this will consider that route before
+/// failing to resolve a route.
+///
+/// The first element in the tuple describes the route, while the second element
+/// returns the remaining arguments. If none remain, an empty string is given.
+fn resolve_hop(
+  query: &str,
+  routes: &BTreeMap<String, String>,
+  default_route: &Option<String>,
+) -> (Option<String>, String) {
+  let mut split_args = query.split_ascii_whitespace().peekable();
+  let command = match split_args.peek() {
+    Some(command) => command,
+    None => return (None, String::new()),
+  };
 
-  match data.routes.get(command.unwrap()) {
-    Some(template) => HttpResponse::Found()
-      .header(
-        header::LOCATION,
-        data
-          .renderer
-          .render_template(template, &template_args)
-          .unwrap(),
-      )
-      .finish(),
-    None => match &data.default_route {
-      Some(route) => {
-        template_args.insert(
-          "query",
-          format!(
-            "{}+{}",
-            command.unwrap(),
-            template_args.get("query").unwrap()
-          ),
-        );
-        HttpResponse::Found()
-          .header(
-            header::LOCATION,
-            data
-              .renderer
-              .render_template(data.routes.get(route).unwrap(), &template_args)
-              .unwrap(),
-          )
-          .finish()
-      }
-      None => HttpResponse::NotFound().body("not found"),
-    },
+  match (routes.get(*command), default_route) {
+    // Found a route
+    (Some(resolved), _) => (
+      Some(resolved.clone()),
+      match split_args.next() {
+        // Discard the first result, we found the route using the first arg
+        Some(_) => split_args.join(" "),
+        None => String::new(),
+      },
+    ),
+    // Unable to find route, but had a default route
+    (None, Some(route)) => (routes.get(route).cloned(), split_args.join(" ")),
+    // No default route and no match
+    (None, None) => (None, String::new()),
   }
 }
 
