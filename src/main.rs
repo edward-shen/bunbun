@@ -1,5 +1,6 @@
 use actix_web::middleware::Logger;
 use actix_web::{App, HttpServer};
+use clap::{crate_authors, crate_version, load_yaml, App as ClapApp};
 use handlebars::Handlebars;
 use hotwatch::{Event, Hotwatch};
 use libc::daemon;
@@ -16,7 +17,6 @@ mod routes;
 mod template_args;
 
 static DEFAULT_CONFIG: &[u8] = include_bytes!("../bunbun.default.toml");
-static CONFIG_FILE: &str = "bunbun.toml";
 
 #[derive(Debug)]
 #[allow(clippy::enum_variant_names)]
@@ -65,10 +65,31 @@ pub struct State {
 }
 
 fn main() -> Result<(), BunBunError> {
-  simple_logger::init_with_level(log::Level::Info)?;
-  // simple_logger::init()?;
+  let yaml = load_yaml!("cli.yaml");
+  let matches = ClapApp::from(yaml)
+    .version(crate_version!())
+    .author(crate_authors!())
+    .get_matches();
 
-  let conf = read_config(CONFIG_FILE)?;
+  let log_level = match (
+    matches.occurrences_of("quiet"),
+    matches.occurrences_of("verbose"),
+  ) {
+    (2..=std::u64::MAX, _) => None,
+    (1, _) => Some(log::Level::Error),
+    (0, 0) => Some(log::Level::Warn),
+    (_, 1) => Some(log::Level::Info),
+    (_, 2) => Some(log::Level::Debug),
+    (_, 3..=std::u64::MAX) => Some(log::Level::Trace),
+  };
+
+  if let Some(level) = log_level {
+    simple_logger::init_with_level(level)?;
+  }
+
+  // config has default location provided
+  let conf_file_location = String::from(matches.value_of("config").unwrap());
+  let conf = read_config(&conf_file_location)?;
   let renderer = compile_templates();
   let state = Arc::from(RwLock::new(State {
     public_address: conf.public_address,
@@ -76,16 +97,28 @@ fn main() -> Result<(), BunBunError> {
     routes: conf.routes,
     renderer,
   }));
-  let state_ref = state.clone();
+
+  // Daemonize after trying to read from config and before watching; allow user
+  // to see a bad config (daemon process sets std{in,out} to /dev/null)
+  if matches.is_present("daemon") {
+    unsafe {
+      debug!("Daemon flag provided. Running as a daemon.");
+      daemon(0, 0);
+    }
+  }
 
   let mut watch = Hotwatch::new_with_custom_delay(Duration::from_millis(500))?;
+  // TODO: keep retry watching in separate thread
 
-  watch.watch(CONFIG_FILE, move |e: Event| {
+  // Closures need their own copy of variables for proper lifecycle management
+  let state_ref = state.clone();
+  let conf_file_location_clone = conf_file_location.clone();
+  let watch_result = watch.watch(&conf_file_location, move |e: Event| {
     if let Event::Write(_) = e {
       trace!("Grabbing writer lock on state...");
       let mut state = state.write().unwrap();
       trace!("Obtained writer lock on state!");
-      match read_config(CONFIG_FILE) {
+      match read_config(&conf_file_location_clone) {
         Ok(conf) => {
           state.public_address = conf.public_address;
           state.default_route = conf.default_route;
@@ -97,13 +130,15 @@ fn main() -> Result<(), BunBunError> {
     } else {
       debug!("Saw event {:#?} but ignored it", e);
     }
-  })?;
+  });
 
-  info!("Watcher is now watching {}", CONFIG_FILE);
-
-  // unsafe {
-  //   daemon(0, 0);
-  // }
+  match watch_result {
+    Ok(_) => info!("Watcher is now watching {}", &conf_file_location),
+    Err(e) => warn!(
+      "Couldn't watch {}: {}. Changes to this file won't be seen!",
+      &conf_file_location, e
+    ),
+  }
 
   HttpServer::new(move || {
     App::new()
