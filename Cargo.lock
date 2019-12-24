@@ -375,7 +375,7 @@ dependencies = [
 
 [[package]]
 name = "bunbun"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "actix-web 1.0.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
