@@ -17,7 +17,7 @@ use std::time::Duration;
 mod routes;
 mod template_args;
 
-static DEFAULT_CONFIG: &[u8] = include_bytes!("../bunbun.default.toml");
+const DEFAULT_CONFIG: &[u8] = include_bytes!("../bunbun.default.toml");
 
 #[derive(Debug)]
 #[allow(clippy::enum_variant_names)]
