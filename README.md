@@ -25,6 +25,18 @@ If you have `cargo`, you can simply run `cargo install bunbun`.
 Once installed, simply run it. A default config file will be created if one does
 not exist. You should model your own custom routes after the provided ones.
 
+### Building for prod
+
+If you're looking to build a release binary, here are the steps I use:
+
+1. `cargo build --release`
+2. `strip target/release/bunbun`
+3. `upx --lzma bunbun`
+
+LZMA provides the best level of compress for Rust binaries; it performs at the
+same level as `upx --ultra-brute` without the time cost and [without breaking
+the binary](https://github.com/upx/upx/issues/224).
+
 ### Configuration
 
 If configuring for development, no further configuration is required. If running
