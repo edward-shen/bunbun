@@ -6,19 +6,30 @@ bind_address: "127.0.0.1:8080"
 public_address: "localhost:8080"
 
 # A default route, if no route is was matched. If none were matched, the entire
-# query is used as the query for the default route. This field is optional.
+# query is used as the query for the default route. This field is optional, but
+# highly recommended for ease-of-use.
 default_route: "g"
 
-routes:
-
+# A list containing route groups. Each route group must have a name and a
+# mapping of routes, with an optional description field. Each route mapping may
+# contain "{{query}}", which will be populated by the user's search query. This
+# input is percent-escaped. If multiple routes are defined, then the later
+# defined route is used.
 groups:
-  meta:
-
-  # Meta
-  ls: "/ls"
-  help: "/ls"
-  list: "/ls"
-  # Google
-  g: "https://google.com/search?q={{query}}"
-  yt: "https://www.youtube.com/results?search_query={{query}}"
-  r: "https://reddit.com/r/{{query}}"
+  -
+    name: "Meta commands"
+    description: "Commands for bunbun"
+    routes:
+      ls: &ls "/ls"
+      help: *ls
+      list: *ls
+  -
+    name: "Google"
+    routes:
+      g: "https://google.com/search?q={{query}}"
+      yt: "https://www.youtube.com/results?search_query={{query}}"
+  -
+    name: "Uncategorized routes"
+    description: "One-off routes with no specific grouping"
+    routes:
+      r: "https://reddit.com/r/{{query}}"

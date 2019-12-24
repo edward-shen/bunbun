@@ -5,7 +5,7 @@ use handlebars::Handlebars;
 use hotwatch::{Event, Hotwatch};
 use libc::daemon;
 use log::{debug, error, info, trace, warn};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::cmp::min;
 use std::collections::HashMap;
 use std::fmt;
@@ -61,6 +61,8 @@ from_error!(log::SetLoggerError, LoggerInitError);
 pub struct State {
   public_address: String,
   default_route: Option<String>,
+  groups: Vec<RouteGroup>,
+  /// Cached, flattened mapping of all routes and their destinations.
   routes: HashMap<String, String>,
   renderer: Handlebars,
 }
@@ -84,7 +86,8 @@ fn main() -> Result<(), BunBunError> {
   let state = Arc::from(RwLock::new(State {
     public_address: conf.public_address,
     default_route: conf.default_route,
-    routes: conf.routes,
+    routes: cache_routes(&conf.groups),
+    groups: conf.groups,
     renderer,
   }));
 
@@ -111,7 +114,8 @@ fn main() -> Result<(), BunBunError> {
         Ok(conf) => {
           state.public_address = conf.public_address;
           state.default_route = conf.default_route;
-          state.routes = conf.routes;
+          state.routes = cache_routes(&conf.groups);
+          state.groups = conf.groups;
           info!("Successfully updated active state");
         }
         Err(e) => warn!("Failed to update config file: {}", e),
@@ -144,6 +148,9 @@ fn main() -> Result<(), BunBunError> {
   Ok(())
 }
 
+/// Initializes the logger based on the number of quiet and verbose flags passed
+/// in. Usually, these values are mutually exclusive, that is, if the number of
+/// verbose flags is non-zero then the quiet flag is zero, and vice versa.
 fn init_logger(
   num_verbose_flags: u64,
   num_quiet_flags: u64,
@@ -171,6 +178,13 @@ struct Config {
   bind_address: String,
   public_address: String,
   default_route: Option<String>,
+  groups: Vec<RouteGroup>,
+}
+
+#[derive(Deserialize, Serialize)]
+struct RouteGroup {
+  name: String,
+  description: Option<String>,
   routes: HashMap<String, String>,
 }
 
@@ -208,6 +222,21 @@ fn read_config(config_file_path: &str) -> Result<Config, BunBunError> {
   // Reading from memory is faster than reading directly from a reader for some
   // reason; see https://github.com/serde-rs/json/issues/160
   Ok(serde_yaml::from_str(&config_str)?)
+}
+
+fn cache_routes(groups: &[RouteGroup]) -> HashMap<String, String> {
+  let mut mapping = HashMap::new();
+  for group in groups {
+    for (kw, dest) in &group.routes {
+      match mapping.insert(kw.clone(), dest.clone()) {
+        None => trace!("Inserting {} into mapping.", kw),
+        Some(old_value) => {
+          debug!("Overriding {} route from {} to {}.", kw, old_value, dest)
+        }
+      }
+    }
+  }
+  mapping
 }
 
 /// Returns an instance with all pre-generated templates included into the

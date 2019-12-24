@@ -23,7 +23,7 @@ const FRAGMENT_ENCODE_SET: &AsciiSet = &CONTROLS
 #[get("/ls")]
 pub fn list(data: Data<Arc<RwLock<State>>>) -> impl Responder {
   let data = data.read().unwrap();
-  HttpResponse::Ok().body(data.renderer.render("list", &data.routes).unwrap())
+  HttpResponse::Ok().body(data.renderer.render("list", &data.groups).unwrap())
 }
 
 #[derive(Deserialize)]
