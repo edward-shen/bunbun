@@ -17,7 +17,7 @@ use std::time::Duration;
 mod routes;
 mod template_args;
 
-const DEFAULT_CONFIG: &[u8] = include_bytes!("../bunbun.default.toml");
+const DEFAULT_CONFIG: &[u8] = include_bytes!("../bunbun.default.yaml");
 
 #[derive(Debug)]
 #[allow(clippy::enum_variant_names)]
@@ -72,23 +72,12 @@ fn main() -> Result<(), BunBunError> {
     .author(crate_authors!())
     .get_matches();
 
-  let log_level = match min(matches.occurrences_of("verbose"), 3) as i8
-    - min(matches.occurrences_of("quiet"), 2) as i8
-  {
-    -2 => None,
-    -1 => Some(log::Level::Error),
-    0 => Some(log::Level::Warn),
-    1 => Some(log::Level::Info),
-    2 => Some(log::Level::Debug),
-    3 => Some(log::Level::Trace),
-    _ => unreachable!(),
-  };
+  init_logger(
+    matches.occurrences_of("verbose"),
+    matches.occurrences_of("quiet"),
+  )?;
 
-  if let Some(level) = log_level {
-    simple_logger::init_with_level(level)?;
-  }
-
-  // config has default location provided
+  // config has default location provided, unwrapping is fine.
   let conf_file_location = String::from(matches.value_of("config").unwrap());
   let conf = read_config(&conf_file_location)?;
   let renderer = compile_templates();
@@ -110,7 +99,6 @@ fn main() -> Result<(), BunBunError> {
 
   let mut watch = Hotwatch::new_with_custom_delay(Duration::from_millis(500))?;
   // TODO: keep retry watching in separate thread
-
   // Closures need their own copy of variables for proper lifecycle management
   let state_ref = state.clone();
   let conf_file_location_clone = conf_file_location.clone();
@@ -152,6 +140,28 @@ fn main() -> Result<(), BunBunError> {
   })
   .bind(&conf.bind_address)?
   .run()?;
+
+  Ok(())
+}
+
+fn init_logger(
+  num_verbose_flags: u64,
+  num_quiet_flags: u64,
+) -> Result<(), BunBunError> {
+  let log_level =
+    match min(num_verbose_flags, 3) as i8 - min(num_quiet_flags, 2) as i8 {
+      -2 => None,
+      -1 => Some(log::Level::Error),
+      0 => Some(log::Level::Warn),
+      1 => Some(log::Level::Info),
+      2 => Some(log::Level::Debug),
+      3 => Some(log::Level::Trace),
+      _ => unreachable!(), // values are clamped to [0, 3] - [0, 2]
+    };
+
+  if let Some(level) = log_level {
+    simple_logger::init_with_level(level)?;
+  }
 
   Ok(())
 }
