@@ -6,6 +6,7 @@ use hotwatch::{Event, Hotwatch};
 use libc::daemon;
 use log::{debug, error, info, trace, warn};
 use serde::Deserialize;
+use std::cmp::min;
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::{read_to_string, OpenOptions};
@@ -71,15 +72,16 @@ fn main() -> Result<(), BunBunError> {
     .author(crate_authors!())
     .get_matches();
 
-  let log_level = match (matches.occurrences_of("verbose")
-    - matches.occurrences_of("quiet")) as i32
+  let log_level = match min(matches.occurrences_of("verbose"), 3) as i8
+    - min(matches.occurrences_of("quiet"), 2) as i8
   {
-    std::i32::MIN..=-2 => None,
+    -2 => None,
     -1 => Some(log::Level::Error),
     0 => Some(log::Level::Warn),
     1 => Some(log::Level::Info),
     2 => Some(log::Level::Debug),
-    3..=std::i32::MAX => Some(log::Level::Trace),
+    3 => Some(log::Level::Trace),
+    _ => unreachable!(),
   };
 
   if let Some(level) = log_level {
