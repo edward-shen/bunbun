@@ -39,6 +39,15 @@ swapping rather than directly updating the file.
 bunbun supports the [OpenSearch Description Format][osdf]. Visit the root page
 of your desired instance of bunbun to learn more.
 
+## Reasons to use bunbun
+
+- Portable: bunbun runs off a single binary and config file.
+- Small: binary is 1.3MB (after running `strip` and `upx --lzma` on the release
+  binary).
+- Convenient: bunbun watches for config changes and refreshes its routes
+  automatically, allowing for rapid development.
+- Memory-safe: Built with [Rust][rust-lang].
+
 [rust-lang]: https://www.rust-lang.org/
 [bunny1]: http://www.bunny1.org/
 [osdf]: https://developer.mozilla.org/en-US/docs/Web/OpenSearch
