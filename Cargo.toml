@@ -19,7 +19,7 @@ itertools = "0.8"
 libc = "0.2"
 log = "0.4"
 simple_logger = "1.3"
-clap = { version = "2.33", features = ["yaml"] }
+clap = { version = "2.33", features = ["yaml", "wrap_help"] }
 
 [profile.release]
 lto = true
