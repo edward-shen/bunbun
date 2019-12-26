@@ -64,7 +64,6 @@ pub struct State {
   groups: Vec<RouteGroup>,
   /// Cached, flattened mapping of all routes and their destinations.
   routes: HashMap<String, String>,
-  renderer: Handlebars,
 }
 
 #[actix_rt::main]
@@ -83,13 +82,11 @@ async fn main() -> Result<(), BunBunError> {
   // config has default location provided, unwrapping is fine.
   let conf_file_location = String::from(matches.value_of("config").unwrap());
   let conf = read_config(&conf_file_location)?;
-  let renderer = compile_templates();
   let state = Arc::from(RwLock::new(State {
     public_address: conf.public_address,
     default_route: conf.default_route,
     routes: cache_routes(&conf.groups),
     groups: conf.groups,
-    renderer,
   }));
 
   // Daemonize after trying to read from config and before watching; allow user
@@ -106,6 +103,7 @@ async fn main() -> Result<(), BunBunError> {
   HttpServer::new(move || {
     App::new()
       .data(state.clone())
+      .app_data(compile_templates())
       .wrap(Logger::default())
       .service(routes::hop)
       .service(routes::list)
@@ -195,6 +193,9 @@ fn read_config(config_file_path: &str) -> Result<Config, BunBunError> {
   Ok(serde_yaml::from_str(&config_str)?)
 }
 
+/// Generates a hashmap of routes from the data structure created by the config
+/// file. This should improve runtime performance and is a better solution than
+/// just iterating over the config object for every hop resolution.
 fn cache_routes(groups: &[RouteGroup]) -> HashMap<String, String> {
   let mut mapping = HashMap::new();
   for group in groups {
@@ -233,6 +234,15 @@ fn compile_templates() -> Handlebars {
   handlebars
 }
 
+/// Starts the watch on a file, if possible. This will only return an Error if
+/// the notify library (used by Hotwatch) fails to initialize, which is
+/// considered to be a more serve error as it may be indicative of a low-level
+/// problem. If a watch was unsuccessfully obtained (the most common is due to
+/// the file not existing), then this will simply warn before returning a watch
+/// object.
+///
+/// This watch object should be kept in scope as dropping it releases all
+/// watches.
 fn start_watch(
   state: Arc<RwLock<State>>,
   config_file_path: String,
@@ -267,6 +277,7 @@ fn start_watch(
       "Couldn't watch {}: {}. Changes to this file won't be seen!",
       &config_file_path, e
     ),
-  };
+  }
+
   Ok(watch)
 }

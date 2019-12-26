@@ -3,7 +3,8 @@ use crate::State;
 use actix_web::get;
 use actix_web::http::header;
 use actix_web::web::{Data, Query};
-use actix_web::{HttpResponse, Responder};
+use actix_web::{HttpRequest, HttpResponse, Responder};
+use handlebars::Handlebars;
 use itertools::Itertools;
 use log::debug;
 use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
@@ -21,9 +22,18 @@ const FRAGMENT_ENCODE_SET: &AsciiSet = &CONTROLS
   .add(b'+');
 
 #[get("/ls")]
-pub async fn list(data: Data<Arc<RwLock<State>>>) -> impl Responder {
+pub async fn list(
+  data: Data<Arc<RwLock<State>>>,
+  req: HttpRequest,
+) -> impl Responder {
   let data = data.read().unwrap();
-  HttpResponse::Ok().body(data.renderer.render("list", &data.groups).unwrap())
+  HttpResponse::Ok().body(
+    req
+      .app_data::<Handlebars>()
+      .unwrap()
+      .render("list", &data.groups)
+      .unwrap(),
+  )
 }
 
 #[derive(Deserialize)]
@@ -34,6 +44,7 @@ pub struct SearchQuery {
 #[get("/hop")]
 pub async fn hop(
   data: Data<Arc<RwLock<State>>>,
+  req: HttpRequest,
   query: Query<SearchQuery>,
 ) -> impl Responder {
   let data = data.read().unwrap();
@@ -42,8 +53,9 @@ pub async fn hop(
     (Some(path), args) => HttpResponse::Found()
       .header(
         header::LOCATION,
-        data
-          .renderer
+        req
+          .app_data::<Handlebars>()
+          .unwrap()
           .render_template(
             &path,
             &template_args::query(
@@ -109,11 +121,15 @@ fn resolve_hop(
 }
 
 #[get("/")]
-pub async fn index(data: Data<Arc<RwLock<State>>>) -> impl Responder {
+pub async fn index(
+  data: Data<Arc<RwLock<State>>>,
+  req: HttpRequest,
+) -> impl Responder {
   let data = data.read().unwrap();
   HttpResponse::Ok().body(
-    data
-      .renderer
+    req
+      .app_data::<Handlebars>()
+      .unwrap()
       .render(
         "index",
         &template_args::hostname(data.public_address.clone()),
@@ -123,7 +139,10 @@ pub async fn index(data: Data<Arc<RwLock<State>>>) -> impl Responder {
 }
 
 #[get("/bunbunsearch.xml")]
-pub async fn opensearch(data: Data<Arc<RwLock<State>>>) -> impl Responder {
+pub async fn opensearch(
+  data: Data<Arc<RwLock<State>>>,
+  req: HttpRequest,
+) -> impl Responder {
   let data = data.read().unwrap();
   HttpResponse::Ok()
     .header(
@@ -131,8 +150,9 @@ pub async fn opensearch(data: Data<Arc<RwLock<State>>>) -> impl Responder {
       "application/opensearchdescription+xml",
     )
     .body(
-      data
-        .renderer
+      req
+        .app_data::<Handlebars>()
+        .unwrap()
         .render(
           "opensearch",
           &template_args::hostname(data.public_address.clone()),
