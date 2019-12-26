@@ -1,5 +1,5 @@
 name: "bunbun"
-about: "Search/jump multiplexer service"
+about: "Search/jump multiplexer service."
 
 args:
   - verbose:

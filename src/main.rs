@@ -101,42 +101,11 @@ async fn main() -> Result<(), BunBunError> {
     }
   }
 
-  let mut watch = Hotwatch::new_with_custom_delay(Duration::from_millis(500))?;
-  // TODO: keep retry watching in separate thread
-  // Closures need their own copy of variables for proper lifecycle management
-  let state_ref = state.clone();
-  let conf_file_location_clone = conf_file_location.clone();
-  let watch_result = watch.watch(&conf_file_location, move |e: Event| {
-    if let Event::Write(_) = e {
-      trace!("Grabbing writer lock on state...");
-      let mut state = state.write().unwrap();
-      trace!("Obtained writer lock on state!");
-      match read_config(&conf_file_location_clone) {
-        Ok(conf) => {
-          state.public_address = conf.public_address;
-          state.default_route = conf.default_route;
-          state.routes = cache_routes(&conf.groups);
-          state.groups = conf.groups;
-          info!("Successfully updated active state");
-        }
-        Err(e) => warn!("Failed to update config file: {}", e),
-      }
-    } else {
-      debug!("Saw event {:#?} but ignored it", e);
-    }
-  });
-
-  match watch_result {
-    Ok(_) => info!("Watcher is now watching {}", &conf_file_location),
-    Err(e) => warn!(
-      "Couldn't watch {}: {}. Changes to this file won't be seen!",
-      &conf_file_location, e
-    ),
-  }
+  let _watch = start_watch(state.clone(), conf_file_location)?;
 
   HttpServer::new(move || {
     App::new()
-      .data(state_ref.clone())
+      .data(state.clone())
       .wrap(Logger::default())
       .service(routes::hop)
       .service(routes::list)
@@ -262,4 +231,42 @@ fn compile_templates() -> Handlebars {
   }
   register_template!["index", "list", "opensearch"];
   handlebars
+}
+
+fn start_watch(
+  state: Arc<RwLock<State>>,
+  config_file_path: String,
+) -> Result<Hotwatch, BunBunError> {
+  let mut watch = Hotwatch::new_with_custom_delay(Duration::from_millis(500))?;
+  // TODO: keep retry watching in separate thread
+  // Closures need their own copy of variables for proper lifecycle management
+  let config_file_path_clone = config_file_path.clone();
+  let watch_result = watch.watch(&config_file_path, move |e: Event| {
+    if let Event::Write(_) = e {
+      trace!("Grabbing writer lock on state...");
+      let mut state = state.write().unwrap();
+      trace!("Obtained writer lock on state!");
+      match read_config(&config_file_path_clone) {
+        Ok(conf) => {
+          state.public_address = conf.public_address;
+          state.default_route = conf.default_route;
+          state.routes = cache_routes(&conf.groups);
+          state.groups = conf.groups;
+          info!("Successfully updated active state");
+        }
+        Err(e) => warn!("Failed to update config file: {}", e),
+      }
+    } else {
+      debug!("Saw event {:#?} but ignored it", e);
+    }
+  });
+
+  match watch_result {
+    Ok(_) => info!("Watcher is now watching {}", &config_file_path),
+    Err(e) => warn!(
+      "Couldn't watch {}: {}. Changes to this file won't be seen!",
+      &config_file_path, e
+    ),
+  };
+  Ok(watch)
 }
