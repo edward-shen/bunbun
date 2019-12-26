@@ -12,6 +12,8 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
+type StateData = Data<Arc<RwLock<State>>>;
+
 /// https://url.spec.whatwg.org/#fragment-percent-encode-set
 const FRAGMENT_ENCODE_SET: &AsciiSet = &CONTROLS
   .add(b' ')
@@ -43,7 +45,7 @@ pub struct SearchQuery {
 
 #[get("/hop")]
 pub async fn hop(
-  data: Data<Arc<RwLock<State>>>,
+  data: StateData,
   req: HttpRequest,
   query: Query<SearchQuery>,
 ) -> impl Responder {
@@ -121,10 +123,7 @@ fn resolve_hop(
 }
 
 #[get("/")]
-pub async fn index(
-  data: Data<Arc<RwLock<State>>>,
-  req: HttpRequest,
-) -> impl Responder {
+pub async fn index(data: StateData, req: HttpRequest) -> impl Responder {
   let data = data.read().unwrap();
   HttpResponse::Ok().body(
     req
@@ -139,10 +138,7 @@ pub async fn index(
 }
 
 #[get("/bunbunsearch.xml")]
-pub async fn opensearch(
-  data: Data<Arc<RwLock<State>>>,
-  req: HttpRequest,
-) -> impl Responder {
+pub async fn opensearch(data: StateData, req: HttpRequest) -> impl Responder {
   let data = data.read().unwrap();
   HttpResponse::Ok()
     .header(
