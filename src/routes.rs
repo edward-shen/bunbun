@@ -21,7 +21,7 @@ const FRAGMENT_ENCODE_SET: &AsciiSet = &CONTROLS
   .add(b'+');
 
 #[get("/ls")]
-pub fn list(data: Data<Arc<RwLock<State>>>) -> impl Responder {
+pub async fn list(data: Data<Arc<RwLock<State>>>) -> impl Responder {
   let data = data.read().unwrap();
   HttpResponse::Ok().body(data.renderer.render("list", &data.groups).unwrap())
 }
@@ -32,7 +32,7 @@ pub struct SearchQuery {
 }
 
 #[get("/hop")]
-pub fn hop(
+pub async fn hop(
   data: Data<Arc<RwLock<State>>>,
   query: Query<SearchQuery>,
 ) -> impl Responder {
@@ -109,7 +109,7 @@ fn resolve_hop(
 }
 
 #[get("/")]
-pub fn index(data: Data<Arc<RwLock<State>>>) -> impl Responder {
+pub async fn index(data: Data<Arc<RwLock<State>>>) -> impl Responder {
   let data = data.read().unwrap();
   HttpResponse::Ok().body(
     data
@@ -123,7 +123,7 @@ pub fn index(data: Data<Arc<RwLock<State>>>) -> impl Responder {
 }
 
 #[get("/bunbunsearch.xml")]
-pub fn opensearch(data: Data<Arc<RwLock<State>>>) -> impl Responder {
+pub async fn opensearch(data: Data<Arc<RwLock<State>>>) -> impl Responder {
   let data = data.read().unwrap();
   HttpResponse::Ok()
     .header(

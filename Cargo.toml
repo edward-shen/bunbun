@@ -9,7 +9,8 @@ readme = "README.md"
 repository = "https://github.com/edward-shen/bunbun"
 
 [dependencies]
-actix-web = "1.0"
+actix-web = "2.0"
+actix-rt = "1.0"
 serde = "1.0"
 serde_yaml = "0.8"
 handlebars = "2.0"

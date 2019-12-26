@@ -67,7 +67,8 @@ pub struct State {
   renderer: Handlebars,
 }
 
-fn main() -> Result<(), BunBunError> {
+#[actix_rt::main]
+async fn main() -> Result<(), BunBunError> {
   let yaml = load_yaml!("cli.yaml");
   let matches = ClapApp::from(yaml)
     .version(crate_version!())
@@ -143,7 +144,8 @@ fn main() -> Result<(), BunBunError> {
       .service(routes::opensearch)
   })
   .bind(&conf.bind_address)?
-  .run()?;
+  .run()
+  .await?;
 
   Ok(())
 }
