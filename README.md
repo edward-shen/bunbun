@@ -31,7 +31,7 @@ If you're looking to build a release binary, here are the steps I use:
 
 1. `cargo build --release`
 2. `strip target/release/bunbun`
-3. `upx --lzma bunbun`
+3. `upx --lzma target/release/bunbun`
 
 LZMA provides the best level of compress for Rust binaries; it performs at the
 same level as `upx --ultra-brute` without the time cost and [without breaking
