@@ -1,6 +1,6 @@
 [package]
 name = "bunbun"
-version = "0.4.0"
+version = "0.4.1"
 authors = ["Edward Shen <code@eddie.sh>"]
 edition = "2018"
 description = "Re-implementation of bunny1 in Rust"
