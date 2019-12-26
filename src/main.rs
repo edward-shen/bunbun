@@ -1,6 +1,7 @@
 use actix_web::middleware::Logger;
 use actix_web::{App, HttpServer};
 use clap::{crate_authors, crate_version, load_yaml, App as ClapApp};
+use error::BunBunError;
 use handlebars::Handlebars;
 use hotwatch::{Event, Hotwatch};
 use libc::daemon;
@@ -8,53 +9,16 @@ use log::{debug, error, info, trace, warn};
 use serde::{Deserialize, Serialize};
 use std::cmp::min;
 use std::collections::HashMap;
-use std::fmt;
 use std::fs::{read_to_string, OpenOptions};
 use std::io::Write;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
+mod error;
 mod routes;
 mod template_args;
 
 const DEFAULT_CONFIG: &[u8] = include_bytes!("../bunbun.default.yaml");
-
-#[derive(Debug)]
-#[allow(clippy::enum_variant_names)]
-enum BunBunError {
-  IoError(std::io::Error),
-  ParseError(serde_yaml::Error),
-  WatchError(hotwatch::Error),
-  LoggerInitError(log::SetLoggerError),
-}
-
-impl fmt::Display for BunBunError {
-  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    match self {
-      BunBunError::IoError(e) => e.fmt(f),
-      BunBunError::ParseError(e) => e.fmt(f),
-      BunBunError::WatchError(e) => e.fmt(f),
-      BunBunError::LoggerInitError(e) => e.fmt(f),
-    }
-  }
-}
-
-/// Generates a from implementation from the specified type to the provided
-/// bunbun error.
-macro_rules! from_error {
-  ($from:ty, $to:ident) => {
-    impl From<$from> for BunBunError {
-      fn from(e: $from) -> Self {
-        BunBunError::$to(e)
-      }
-    }
-  };
-}
-
-from_error!(std::io::Error, IoError);
-from_error!(serde_yaml::Error, ParseError);
-from_error!(hotwatch::Error, WatchError);
-from_error!(log::SetLoggerError, LoggerInitError);
 
 /// Dynamic variables that either need to be present at runtime, or can be
 /// changed during runtime.
