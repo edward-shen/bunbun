@@ -1,0 +1,13 @@
+[Unit]
+Description=Bunbun search multiplexer/jump service
+After=network.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=1
+ExecStart=/usr/bin/bunbun
+
+[Install]
+WantedBy=multi-user.target
