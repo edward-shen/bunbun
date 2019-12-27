@@ -14,10 +14,6 @@ args:
       multiple: true
       help: Decreases the log level to error or no logging at all, respectively.
       conflicts_with: "verbose"
-  - daemon:
-      short: "d"
-      long: "daemon"
-      help: "Run bunbun as a daemon."
   - config:
       short: "c"
       long: "config"

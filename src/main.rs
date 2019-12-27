@@ -1,10 +1,8 @@
-use actix_web::middleware::Logger;
-use actix_web::{App, HttpServer};
+use actix_web::{middleware::Logger, App, HttpServer};
 use clap::{crate_authors, crate_version, load_yaml, App as ClapApp};
 use error::BunBunError;
 use handlebars::Handlebars;
 use hotwatch::{Event, Hotwatch};
-use libc::daemon;
 use log::{debug, error, info, trace, warn};
 use serde::{Deserialize, Serialize};
 use std::cmp::min;
@@ -52,15 +50,6 @@ async fn main() -> Result<(), BunBunError> {
     routes: cache_routes(&conf.groups),
     groups: conf.groups,
   }));
-
-  // Daemonize after trying to read from config and before watching; allow user
-  // to see a bad config (daemon process sets std{in,out} to /dev/null)
-  if matches.is_present("daemon") {
-    unsafe {
-      debug!("Daemon flag provided. Running as a daemon.");
-      daemon(0, 0);
-    }
-  }
 
   let _watch = start_watch(state.clone(), conf_file_location)?;
 
