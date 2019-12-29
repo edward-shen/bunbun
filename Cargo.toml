@@ -7,6 +7,7 @@ description = "Re-implementation of bunny1 in Rust"
 license = "AGPL-3.0"
 readme = "README.md"
 repository = "https://github.com/edward-shen/bunbun"
+exclude = ["/aux/"]
 
 [dependencies]
 actix-web = "2.0"
