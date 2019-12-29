@@ -112,7 +112,10 @@ fn resolve_hop(
     (None, Some(route)) => {
       let args = split_args.join(" ");
       debug!("Using default route {} with args {}", route, args);
-      (routes.get(route).cloned(), args)
+      match routes.get(route) {
+        Some(v) => (Some(v.to_owned()), args),
+        None => (None, String::new()),
+      }
     }
     // No default route and no match
     (None, None) => {
@@ -155,4 +158,66 @@ pub async fn opensearch(data: StateData, req: HttpRequest) -> impl Responder {
         )
         .unwrap(),
     )
+}
+
+#[cfg(test)]
+mod resolve_hop {
+  use super::*;
+
+  fn generate_route_result(
+    keyword: &str,
+    args: &str,
+  ) -> (Option<String>, String) {
+    (Some(String::from(keyword)), String::from(args))
+  }
+
+  #[test]
+  fn empty_routes_no_default_yields_failed_hop() {
+    assert_eq!(
+      resolve_hop("hello world", &HashMap::new(), &None),
+      (None, String::new())
+    );
+  }
+
+  #[test]
+  fn empty_routes_some_default_yields_failed_hop() {
+    assert_eq!(
+      resolve_hop(
+        "hello world",
+        &HashMap::new(),
+        &Some(String::from("google"))
+      ),
+      (None, String::new())
+    );
+  }
+
+  #[test]
+  fn only_default_routes_some_default_yields_default_hop() {
+    let mut map = HashMap::new();
+    map.insert(String::from("google"), String::from("https://example.com"));
+    assert_eq!(
+      resolve_hop("hello world", &map, &Some(String::from("google"))),
+      generate_route_result("https://example.com", "hello world"),
+    );
+  }
+
+  #[test]
+  fn non_default_routes_some_default_yields_non_default_hop() {
+    let mut map = HashMap::new();
+    map.insert(String::from("google"), String::from("https://example.com"));
+    assert_eq!(
+      resolve_hop("google hello world", &map, &Some(String::from("a"))),
+      generate_route_result("https://example.com", "hello world"),
+    );
+  }
+
+  #[test]
+  fn non_default_routes_no_default_yields_non_default_hop() {
+    let mut map = HashMap::new();
+    map.insert(String::from("google"), String::from("https://example.com"));
+    assert_eq!(
+      resolve_hop("google hello world", &map, &None),
+      generate_route_result("https://example.com", "hello world"),
+    );
+  }
 }

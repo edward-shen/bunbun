@@ -1,3 +1,4 @@
+use std::error::Error;
 use std::fmt;
 
 #[derive(Debug)]
@@ -8,6 +9,8 @@ pub enum BunBunError {
   WatchError(hotwatch::Error),
   LoggerInitError(log::SetLoggerError),
 }
+
+impl Error for BunBunError {}
 
 impl fmt::Display for BunBunError {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

@@ -95,7 +95,7 @@ fn init_logger(
   Ok(())
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug, PartialEq)]
 struct Config {
   bind_address: String,
   public_address: String,
@@ -103,7 +103,7 @@ struct Config {
   groups: Vec<RouteGroup>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 struct RouteGroup {
   name: String,
   description: Option<String>,
@@ -233,4 +233,176 @@ fn start_watch(
   }
 
   Ok(watch)
+}
+
+#[cfg(test)]
+mod init_logger {
+  use super::*;
+
+  #[test]
+  fn defaults_to_warn() -> Result<(), BunBunError> {
+    init_logger(0, 0)?;
+    assert_eq!(log::max_level(), log::Level::Warn);
+    Ok(())
+  }
+
+  #[test]
+  #[ignore]
+  fn caps_to_2_when_log_level_is_lt_2() -> Result<(), BunBunError> {
+    init_logger(0, 3)?;
+    assert_eq!(log::max_level(), log::LevelFilter::Off);
+    Ok(())
+  }
+
+  #[test]
+  #[ignore]
+  fn caps_to_3_when_log_level_is_gt_3() -> Result<(), BunBunError> {
+    init_logger(4, 0)?;
+    assert_eq!(log::max_level(), log::Level::Trace);
+    Ok(())
+  }
+}
+
+#[cfg(test)]
+mod read_config {
+  use super::*;
+  use tempfile::NamedTempFile;
+
+  #[test]
+  fn returns_default_config_if_path_does_not_exist() {
+    assert_eq!(
+      read_config("/this_is_a_non_existent_file").unwrap(),
+      serde_yaml::from_slice(DEFAULT_CONFIG).unwrap()
+    );
+  }
+
+  #[test]
+  fn returns_error_if_given_empty_config() {
+    assert_eq!(
+      read_config("/dev/null").unwrap_err().to_string(),
+      "EOF while parsing a value"
+    );
+  }
+
+  #[test]
+  fn returns_error_if_given_invalid_config() -> Result<(), std::io::Error> {
+    let mut tmp_file = NamedTempFile::new()?;
+    tmp_file.write_all(b"g")?;
+    assert_eq!(
+      read_config(tmp_file.path().to_str().unwrap())
+        .unwrap_err()
+        .to_string(),
+      r#"invalid type: string "g", expected struct Config at line 1 column 1"#
+    );
+    Ok(())
+  }
+
+  #[test]
+  fn returns_error_if_config_missing_field() -> Result<(), std::io::Error> {
+    let mut tmp_file = NamedTempFile::new()?;
+    tmp_file.write_all(
+      br#"
+      bind_address: "localhost"
+      public_address: "localhost"
+      "#,
+    )?;
+    assert_eq!(
+      read_config(tmp_file.path().to_str().unwrap())
+        .unwrap_err()
+        .to_string(),
+      "missing field `groups` at line 2 column 19"
+    );
+    Ok(())
+  }
+
+  #[test]
+  fn returns_ok_if_valid_config() -> Result<(), std::io::Error> {
+    let mut tmp_file = NamedTempFile::new()?;
+    tmp_file.write_all(
+      br#"
+      bind_address: "a"
+      public_address: "b"
+      groups: []"#,
+    )?;
+    assert_eq!(
+      read_config(tmp_file.path().to_str().unwrap()).unwrap(),
+      Config {
+        bind_address: String::from("a"),
+        public_address: String::from("b"),
+        groups: vec![],
+        default_route: None,
+      }
+    );
+    Ok(())
+  }
+}
+
+#[cfg(test)]
+mod cache_routes {
+  use super::*;
+  use std::iter::FromIterator;
+
+  fn generate_routes(routes: &[(&str, &str)]) -> HashMap<String, String> {
+    HashMap::from_iter(
+      routes
+        .iter()
+        .map(|(k, v)| (String::from(*k), String::from(*v))),
+    )
+  }
+
+  #[test]
+  fn empty_groups_yield_empty_routes() {
+    assert_eq!(cache_routes(&[]), HashMap::new());
+  }
+
+  #[test]
+  fn disjoint_groups_yield_summed_routes() {
+    let group1 = RouteGroup {
+      name: String::from("x"),
+      description: Some(String::from("y")),
+      routes: generate_routes(&[("a", "b"), ("c", "d")]),
+    };
+
+    let group2 = RouteGroup {
+      name: String::from("5"),
+      description: Some(String::from("6")),
+      routes: generate_routes(&[("1", "2"), ("3", "4")]),
+    };
+
+    assert_eq!(
+      cache_routes(&[group1, group2]),
+      generate_routes(&[("a", "b"), ("c", "d"), ("1", "2"), ("3", "4")])
+    );
+  }
+
+  #[test]
+  fn overlapping_groups_use_latter_routes() {
+    let group1 = RouteGroup {
+      name: String::from("x"),
+      description: Some(String::from("y")),
+      routes: generate_routes(&[("a", "b"), ("c", "d")]),
+    };
+
+    let group2 = RouteGroup {
+      name: String::from("5"),
+      description: Some(String::from("6")),
+      routes: generate_routes(&[("a", "1"), ("c", "2")]),
+    };
+
+    assert_eq!(
+      cache_routes(&[group1.clone(), group2]),
+      generate_routes(&[("a", "1"), ("c", "2")])
+    );
+
+    let group3 = RouteGroup {
+      name: String::from("5"),
+      description: Some(String::from("6")),
+      routes: generate_routes(&[("a", "1"), ("b", "2")]),
+    };
+
+    assert_eq!(
+      cache_routes(&[group1, group3]),
+      generate_routes(&[("a", "1"), ("b", "2"), ("c", "d")])
+    );
+  }
 }
