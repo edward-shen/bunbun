@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use actix_web::{middleware::Logger, App, HttpServer};
 use clap::{crate_authors, crate_version, load_yaml, App as ClapApp};
 use error::BunBunError;
