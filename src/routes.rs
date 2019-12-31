@@ -8,11 +8,10 @@ use handlebars::Handlebars;
 use itertools::Itertools;
 use log::debug;
 use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
-use serde::Deserialize;
+use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
+use std::fmt;
 use std::sync::{Arc, RwLock};
-
-type StateData = Data<Arc<RwLock<State>>>;
 
 /// https://url.spec.whatwg.org/#fragment-percent-encode-set
 const FRAGMENT_ENCODE_SET: &AsciiSet = &CONTROLS
@@ -22,6 +21,67 @@ const FRAGMENT_ENCODE_SET: &AsciiSet = &CONTROLS
   .add(b'>')
   .add(b'`')
   .add(b'+');
+
+type StateData = Data<Arc<RwLock<State>>>;
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum Route {
+  External(String),
+  Path(String),
+}
+
+impl Serialize for Route {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: Serializer,
+  {
+    match self {
+      Self::External(s) => serializer.serialize_str(s),
+      Self::Path(s) => serializer.serialize_str(s),
+    }
+  }
+}
+
+impl<'de> Deserialize<'de> for Route {
+  fn deserialize<D>(deserializer: D) -> Result<Route, D::Error>
+  where
+    D: Deserializer<'de>,
+  {
+    struct RouteVisitor;
+    impl<'de> Visitor<'de> for RouteVisitor {
+      type Value = Route;
+
+      fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("string")
+      }
+
+      fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+      where
+        E: serde::de::Error,
+      {
+        // Return early if it's a path, don't go through URL parsing
+        if std::path::Path::new(value).exists() {
+          debug!("Parsed {} as a valid local path.", value);
+          Ok(Route::Path(value.into()))
+        } else {
+          debug!("{} does not exist on disk, assuming web path.", value);
+          Ok(Route::External(value.into()))
+        }
+      }
+    }
+
+    deserializer.deserialize_str(RouteVisitor)
+  }
+}
+
+impl std::fmt::Display for Route {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Self::External(s) => write!(f, "raw path ({})", s),
+      Self::Path(s) => write!(f, "file path ({})", s),
+    }
+  }
+}
 
 #[get("/ls")]
 pub async fn list(
@@ -59,7 +119,10 @@ pub async fn hop(
           .app_data::<Handlebars>()
           .unwrap()
           .render_template(
-            &path,
+            match path {
+              Route::Path(s) => s, // TODO: try resolve path
+              Route::External(s) => s,
+            },
             &template_args::query(
               utf8_percent_encode(&args, FRAGMENT_ENCODE_SET).to_string(),
             ),
@@ -77,11 +140,11 @@ pub async fn hop(
 ///
 /// The first element in the tuple describes the route, while the second element
 /// returns the remaining arguments. If none remain, an empty string is given.
-fn resolve_hop(
+fn resolve_hop<'a>(
   query: &str,
-  routes: &HashMap<String, String>,
+  routes: &'a HashMap<String, Route>,
   default_route: &Option<String>,
-) -> (Option<String>, String) {
+) -> (Option<&'a Route>, String) {
   let mut split_args = query.split_ascii_whitespace().peekable();
   let command = match split_args.peek() {
     Some(command) => command,
@@ -94,7 +157,7 @@ fn resolve_hop(
   match (routes.get(*command), default_route) {
     // Found a route
     (Some(resolved), _) => (
-      Some(resolved.clone()),
+      Some(resolved),
       match split_args.next() {
         // Discard the first result, we found the route using the first arg
         Some(_) => {
@@ -113,7 +176,7 @@ fn resolve_hop(
       let args = split_args.join(" ");
       debug!("Using default route {} with args {}", route, args);
       match routes.get(route) {
-        Some(v) => (Some(v.to_owned()), args),
+        Some(v) => (Some(v), args),
         None => (None, String::new()),
       }
     }
@@ -161,14 +224,68 @@ pub async fn opensearch(data: StateData, req: HttpRequest) -> impl Responder {
 }
 
 #[cfg(test)]
+mod route {
+  use super::*;
+  use serde_yaml::{from_str, to_string};
+  use tempfile::NamedTempFile;
+
+  #[test]
+  fn deserialize_relative_path() {
+    let tmpfile = NamedTempFile::new_in(".").unwrap();
+    let path = format!("{}", tmpfile.path().display());
+    let path = path.get(path.rfind(".").unwrap()..).unwrap();
+    let path = std::path::Path::new(path);
+    assert!(path.is_relative());
+    let path = path.to_str().unwrap();
+    assert_eq!(from_str::<Route>(path).unwrap(), Route::Path(path.into()));
+  }
+
+  #[test]
+  fn deserialize_absolute_path() {
+    let tmpfile = NamedTempFile::new().unwrap();
+    let path = format!("{}", tmpfile.path().display());
+    assert!(tmpfile.path().is_absolute());
+    assert_eq!(from_str::<Route>(&path).unwrap(), Route::Path(path));
+  }
+
+  #[test]
+  fn deserialize_http_path() {
+    assert_eq!(
+      from_str::<Route>("http://google.com").unwrap(),
+      Route::External("http://google.com".into())
+    );
+  }
+
+  #[test]
+  fn deserialize_https_path() {
+    assert_eq!(
+      from_str::<Route>("https://google.com").unwrap(),
+      Route::External("https://google.com".into())
+    );
+  }
+
+  #[test]
+  fn serialize() {
+    assert_eq!(
+      &to_string(&Route::External("hello world".into())).unwrap(),
+      "---\nhello world"
+    );
+    assert_eq!(
+      &to_string(&Route::Path("hello world".into())).unwrap(),
+      "---\nhello world"
+    );
+  }
+}
+
+#[cfg(test)]
 mod resolve_hop {
   use super::*;
 
-  fn generate_route_result(
-    keyword: &str,
+  fn generate_route_result<'a>(
+    keyword: &'a Route,
     args: &str,
-  ) -> (Option<String>, String) {
-    (Some(String::from(keyword)), String::from(args))
+  ) -> (Option<&'a Route>, String) {
+    (Some(keyword), String::from(args))
   }
 
   #[test]
@@ -193,31 +310,49 @@ mod resolve_hop {
 
   #[test]
   fn only_default_routes_some_default_yields_default_hop() {
-    let mut map = HashMap::new();
-    map.insert(String::from("google"), String::from("https://example.com"));
+    let mut map: HashMap<String, Route> = HashMap::new();
+    map.insert(
+      "google".into(),
+      Route::External("https://example.com".into()),
+    );
     assert_eq!(
       resolve_hop("hello world", &map, &Some(String::from("google"))),
-      generate_route_result("https://example.com", "hello world"),
+      generate_route_result(
+        &Route::External("https://example.com".into()),
+        "hello world"
+      ),
     );
   }
 
   #[test]
   fn non_default_routes_some_default_yields_non_default_hop() {
-    let mut map = HashMap::new();
-    map.insert(String::from("google"), String::from("https://example.com"));
+    let mut map: HashMap<String, Route> = HashMap::new();
+    map.insert(
+      "google".into(),
+      Route::External("https://example.com".into()),
+    );
     assert_eq!(
       resolve_hop("google hello world", &map, &Some(String::from("a"))),
-      generate_route_result("https://example.com", "hello world"),
+      generate_route_result(
+        &Route::External("https://example.com".into()),
+        "hello world"
+      ),
     );
   }
 
   #[test]
   fn non_default_routes_no_default_yields_non_default_hop() {
-    let mut map = HashMap::new();
-    map.insert(String::from("google"), String::from("https://example.com"));
+    let mut map: HashMap<String, Route> = HashMap::new();
+    map.insert(
+      "google".into(),
+      Route::External("https://example.com".into()),
+    );
     assert_eq!(
       resolve_hop("google hello world", &map, &None),
-      generate_route_result("https://example.com", "hello world"),
+      generate_route_result(
+        &Route::External("https://example.com".into()),
+        "hello world"
+      ),
     );
   }
 }

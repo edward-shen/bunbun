@@ -1,4 +1,4 @@
-use crate::BunBunError;
+use crate::{routes::Route, BunBunError};
 use log::{debug, error, info, trace};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -19,7 +19,7 @@ pub struct Config {
 pub struct RouteGroup {
   pub name: String,
   pub description: Option<String>,
-  pub routes: HashMap<String, String>,
+  pub routes: HashMap<String, Route>,
 }
 
 // TODO implement rlua:
@@ -33,13 +33,6 @@ pub struct RouteGroup {
 // })?;
 // # Ok(())
 // # }
-
-#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
-struct Route {
-  dest: Option<String>,
-  source: Option<String>,
-  script: Option<String>,
-}
 
 /// Attempts to read the config file. If it doesn't exist, generate one a
 /// default config file before attempting to parse it.

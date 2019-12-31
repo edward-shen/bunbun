@@ -24,7 +24,7 @@ pub struct State {
   default_route: Option<String>,
   groups: Vec<RouteGroup>,
   /// Cached, flattened mapping of all routes and their destinations.
-  routes: HashMap<String, String>,
+  routes: HashMap<String, routes::Route>,
 }
 
 #[actix_rt::main]
@@ -97,7 +97,7 @@ fn init_logger(
 /// Generates a hashmap of routes from the data structure created by the config
 /// file. This should improve runtime performance and is a better solution than
 /// just iterating over the config object for every hop resolution.
-fn cache_routes(groups: &[RouteGroup]) -> HashMap<String, String> {
+fn cache_routes(groups: &[RouteGroup]) -> HashMap<String, routes::Route> {
   let mut mapping = HashMap::new();
   for group in groups {
     for (kw, dest) in &group.routes {
@@ -216,11 +216,13 @@ mod cache_routes {
   use super::*;
   use std::iter::FromIterator;
 
-  fn generate_routes(routes: &[(&str, &str)]) -> HashMap<String, String> {
+  fn generate_external_routes(
+    routes: &[(&str, &str)],
+  ) -> HashMap<String, routes::Route> {
     HashMap::from_iter(
       routes
         .iter()
-        .map(|(k, v)| (String::from(*k), String::from(*v))),
+        .map(|(k, v)| ((*k).into(), routes::Route::External((*v).into()))),
     )
   }
 
@@ -234,18 +236,23 @@ mod cache_routes {
     let group1 = RouteGroup {
       name: String::from("x"),
       description: Some(String::from("y")),
-      routes: generate_routes(&[("a", "b"), ("c", "d")]),
+      routes: generate_external_routes(&[("a", "b"), ("c", "d")]),
     };
 
     let group2 = RouteGroup {
       name: String::from("5"),
       description: Some(String::from("6")),
-      routes: generate_routes(&[("1", "2"), ("3", "4")]),
+      routes: generate_external_routes(&[("1", "2"), ("3", "4")]),
     };
 
     assert_eq!(
       cache_routes(&[group1, group2]),
-      generate_routes(&[("a", "b"), ("c", "d"), ("1", "2"), ("3", "4")])
+      generate_external_routes(&[
+        ("a", "b"),
+        ("c", "d"),
+        ("1", "2"),
+        ("3", "4")
+      ])
     );
   }
 
@@ -254,29 +261,29 @@ mod cache_routes {
     let group1 = RouteGroup {
       name: String::from("x"),
       description: Some(String::from("y")),
-      routes: generate_routes(&[("a", "b"), ("c", "d")]),
+      routes: generate_external_routes(&[("a", "b"), ("c", "d")]),
     };
 
     let group2 = RouteGroup {
       name: String::from("5"),
       description: Some(String::from("6")),
-      routes: generate_routes(&[("a", "1"), ("c", "2")]),
+      routes: generate_external_routes(&[("a", "1"), ("c", "2")]),
     };
 
     assert_eq!(
       cache_routes(&[group1.clone(), group2]),
-      generate_routes(&[("a", "1"), ("c", "2")])
+      generate_external_routes(&[("a", "1"), ("c", "2")])
     );
 
     let group3 = RouteGroup {
       name: String::from("5"),
       description: Some(String::from("6")),
-      routes: generate_routes(&[("a", "1"), ("b", "2")]),
+      routes: generate_external_routes(&[("a", "1"), ("b", "2")]),
     };
 
     assert_eq!(
       cache_routes(&[group1, group3]),
-      generate_routes(&[("a", "1"), ("b", "2"), ("c", "d")])
+      generate_external_routes(&[("a", "1"), ("b", "2"), ("c", "d")])
     );
   }
 }
