@@ -32,6 +32,9 @@ pub enum Route {
   Path(String),
 }
 
+/// Serialization of the Route enum needs to be transparent, but since the
+/// `#[serde(transparent)]` macro isn't available on enums, so we need to
+/// implement it manually.
 impl Serialize for Route {
   fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
   where
@@ -44,6 +47,11 @@ impl Serialize for Route {
   }
 }
 
+/// Deserialization of the route string into the enum requires us to figure out
+/// whether or not the string is valid to run as an executable or not. To
+/// determine this, we simply check if it exists on disk or assume that it's a
+/// web path. This incurs a disk check operation, but since users shouldn't be
+/// updating the config that frequently, it should be fine.
 impl<'de> Deserialize<'de> for Route {
   fn deserialize<D>(deserializer: D) -> Result<Route, D::Error>
   where
@@ -128,7 +136,7 @@ pub async fn hop(
               .app_data::<Handlebars>()
               .unwrap()
               .render_template(
-                &std::str::from_utf8(&path).unwrap().trim(),
+                std::str::from_utf8(&path).unwrap(),
                 &template_args::query(
                   utf8_percent_encode(&args, FRAGMENT_ENCODE_SET).to_string(),
                 ),
@@ -218,15 +226,12 @@ pub async fn index(data: StateData, req: HttpRequest) -> impl Responder {
 /// Runs the executable with the user's input as a single argument. Returns Ok
 /// so long as the executable was successfully executed. Returns an Error if the
 /// file doesn't exist or bunbun did not have permission to read and execute the
-/// file. Note that thi
+/// file.
 fn resolve_path(
   path: PathBuf,
   args: &str,
 ) -> Result<Vec<u8>, crate::BunBunError> {
-  // Unwrap is OK, we validated the path exists already
-  let output = Command::new(path.canonicalize().unwrap())
-    .arg(args)
-    .output()?;
+  let output = Command::new(path.canonicalize()?).arg(args).output()?;
 
   if output.status.success() {
     Ok(output.stdout)
