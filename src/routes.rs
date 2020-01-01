@@ -11,6 +11,7 @@ use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::fmt;
+use std::path::PathBuf;
 use std::process::Command;
 use std::sync::{Arc, RwLock};
 
@@ -78,8 +79,8 @@ impl<'de> Deserialize<'de> for Route {
 impl std::fmt::Display for Route {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
-      Self::External(s) => write!(f, "raw path ({})", s),
-      Self::Path(s) => write!(f, "file path ({})", s),
+      Self::External(s) => write!(f, "raw ({})", s),
+      Self::Path(s) => write!(f, "file ({})", s),
     }
   }
 }
@@ -115,7 +116,7 @@ pub async fn hop(
   match resolve_hop(&query.to, &data.routes, &data.default_route) {
     (Some(path), args) => {
       let resolved_template = match path {
-        Route::Path(path) => resolve_path(path, &args),
+        Route::Path(path) => resolve_path(PathBuf::from(path), &args),
         Route::External(path) => Ok(path.to_owned().into_bytes()),
       };
 
@@ -214,8 +215,17 @@ pub async fn index(data: StateData, req: HttpRequest) -> impl Responder {
   )
 }
 
-fn resolve_path(path: &str, args: &str) -> Result<Vec<u8>, crate::BunBunError> {
-  Ok(Command::new(path).arg(args).output()?.stdout)
+fn resolve_path(
+  path: PathBuf,
+  args: &str,
+) -> Result<Vec<u8>, crate::BunBunError> {
+  Ok(
+    // Unwrap is OK, we validated the path exists already
+    Command::new(path.canonicalize().unwrap())
+      .arg(args)
+      .output()?
+      .stdout,
+  )
 }
 
 #[get("/bunbunsearch.xml")]
