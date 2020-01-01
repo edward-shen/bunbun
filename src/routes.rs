@@ -290,8 +290,8 @@ mod resolve_path {
     // How many ".." needed to get to /
     let nest_level = current_dir().unwrap().ancestors().count() - 1;
     let mut rel_path = PathBuf::from("../".repeat(nest_level));
-    rel_path.push("./bin/env");
-    assert!(resolve_path(rel_path, "echo").is_ok());
+    rel_path.push("./bin/echo");
+    assert!(resolve_path(rel_path, "hello").is_ok());
   }
 
   #[test]
