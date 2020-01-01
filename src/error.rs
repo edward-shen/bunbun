@@ -8,6 +8,7 @@ pub enum BunBunError {
   ParseError(serde_yaml::Error),
   WatchError(hotwatch::Error),
   LoggerInitError(log::SetLoggerError),
+  CustomProgramError(String),
 }
 
 impl Error for BunBunError {}
@@ -15,10 +16,11 @@ impl Error for BunBunError {}
 impl fmt::Display for BunBunError {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match self {
-      BunBunError::IoError(e) => e.fmt(f),
-      BunBunError::ParseError(e) => e.fmt(f),
-      BunBunError::WatchError(e) => e.fmt(f),
-      BunBunError::LoggerInitError(e) => e.fmt(f),
+      Self::IoError(e) => e.fmt(f),
+      Self::ParseError(e) => e.fmt(f),
+      Self::WatchError(e) => e.fmt(f),
+      Self::LoggerInitError(e) => e.fmt(f),
+      Self::CustomProgramError(msg) => write!(f, "{}", msg),
     }
   }
 }
@@ -29,7 +31,7 @@ macro_rules! from_error {
   ($from:ty, $to:ident) => {
     impl From<$from> for BunBunError {
       fn from(e: $from) -> Self {
-        BunBunError::$to(e)
+        Self::$to(e)
       }
     }
   };

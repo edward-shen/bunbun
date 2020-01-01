@@ -137,8 +137,8 @@ pub async fn hop(
           )
           .finish(),
         Err(e) => {
-          error!("Failed to resolve template for path {}: {}", path, e);
-          HttpResponse::InternalServerError().body("Something went wrong :(")
+          error!("Failed to redirect user for {}: {}", path, e);
+          HttpResponse::InternalServerError().body("Something went wrong :(\n")
         }
       }
     }
@@ -215,17 +215,29 @@ pub async fn index(data: StateData, req: HttpRequest) -> impl Responder {
   )
 }
 
+/// Runs the executable with the user's input as a single argument. Returns Ok
+/// so long as the executable was successfully executed. Returns an Error if the
+/// file doesn't exist or bunbun did not have permission to read and execute the
+/// file. Note that thi
 fn resolve_path(
   path: PathBuf,
   args: &str,
 ) -> Result<Vec<u8>, crate::BunBunError> {
-  Ok(
-    // Unwrap is OK, we validated the path exists already
-    Command::new(path.canonicalize().unwrap())
-      .arg(args)
-      .output()?
-      .stdout,
-  )
+  // Unwrap is OK, we validated the path exists already
+  let output = Command::new(path.canonicalize().unwrap())
+    .arg(args)
+    .output()?;
+
+  if output.status.success() {
+    Ok(output.stdout)
+  } else {
+    error!(
+      "Program exit code for {} was not 0! Dumping standard error!",
+      path.display(),
+    );
+    let error = String::from_utf8_lossy(&output.stderr);
+    Err(crate::BunBunError::CustomProgramError(error.to_string()))
+  }
 }
 
 #[get("/bunbunsearch.xml")]
