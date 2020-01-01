@@ -194,6 +194,10 @@ mod init_logger {
     Ok(())
   }
 
+  // The following tests work but because the log crate is global, initializing
+  // the logger more than once (read: testing it more than once) leads to a
+  // panic. These ignored tests must be manually tested.
+
   #[test]
   #[ignore]
   fn caps_to_2_when_log_level_is_lt_2() -> Result<(), BunBunError> {
