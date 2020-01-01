@@ -150,7 +150,7 @@ fn start_watch(
 ) -> Result<Hotwatch, BunBunError> {
   let mut watch = Hotwatch::new_with_custom_delay(Duration::from_millis(500))?;
   // TODO: keep retry watching in separate thread
-  // Closures need their own copy of variables for proper lifecycle management
+  // Closures need their own copy of variables for proper life cycle management
   let config_file_path_clone = config_file_path.clone();
   let watch_result = watch.watch(&config_file_path, move |e: Event| {
     if let Event::Write(_) = e {

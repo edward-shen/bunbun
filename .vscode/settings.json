@@ -1,11 +1,15 @@
 {
   "cSpell.words": [
+    "Deserialization",
     "Hotwatch",
+    "Serializer",
     "actix",
     "bunbun",
     "bunbunsearch",
+    "canonicalize",
     "itertools",
-    "opensearchdescription"
+    "opensearchdescription",
+    "tempfile"
   ],
   "python.pythonPath": "/usr/bin/python3"
 }
