@@ -1,8 +1,6 @@
-use crate::template_args;
-use crate::State;
-use actix_web::get;
-use actix_web::http::header;
+use crate::{template_args, BunBunError, State};
 use actix_web::web::{Data, Query};
+use actix_web::{get, http::header};
 use actix_web::{HttpRequest, HttpResponse, Responder};
 use handlebars::Handlebars;
 use itertools::Itertools;
@@ -227,10 +225,7 @@ pub async fn index(data: StateData, req: HttpRequest) -> impl Responder {
 /// so long as the executable was successfully executed. Returns an Error if the
 /// file doesn't exist or bunbun did not have permission to read and execute the
 /// file.
-fn resolve_path(
-  path: PathBuf,
-  args: &str,
-) -> Result<Vec<u8>, crate::BunBunError> {
+fn resolve_path(path: PathBuf, args: &str) -> Result<Vec<u8>, BunBunError> {
   let output = Command::new(path.canonicalize()?).arg(args).output()?;
 
   if output.status.success() {
@@ -241,7 +236,7 @@ fn resolve_path(
       path.display(),
     );
     let error = String::from_utf8_lossy(&output.stderr);
-    Err(crate::BunBunError::CustomProgramError(error.to_string()))
+    Err(BunBunError::CustomProgramError(error.to_string()))
   }
 }
 

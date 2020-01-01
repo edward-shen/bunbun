@@ -22,18 +22,6 @@ pub struct RouteGroup {
   pub routes: HashMap<String, Route>,
 }
 
-// TODO implement rlua:
-// # use rlua::{Lua, Result};
-// # fn main() -> Result<()> {
-// let lua = Lua::new();
-// lua.context(|lua_context| {
-//    lua_context.load(r#"
-//        print("hello world!")
-//    "#).exec()
-// })?;
-// # Ok(())
-// # }
-
 /// Attempts to read the config file. If it doesn't exist, generate one a
 /// default config file before attempting to parse it.
 pub fn read_config(config_file_path: &str) -> Result<Config, BunBunError> {
