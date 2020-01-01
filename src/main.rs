@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use crate::config::{read_config, RouteGroup};
+use crate::config::{read_config, Route, RouteGroup};
 use actix_web::{middleware::Logger, App, HttpServer};
 use clap::{crate_authors, crate_version, load_yaml, App as ClapApp};
 use error::BunBunError;
@@ -24,7 +24,7 @@ pub struct State {
   default_route: Option<String>,
   groups: Vec<RouteGroup>,
   /// Cached, flattened mapping of all routes and their destinations.
-  routes: HashMap<String, routes::Route>,
+  routes: HashMap<String, Route>,
 }
 
 #[actix_rt::main]
@@ -97,7 +97,7 @@ fn init_logger(
 /// Generates a hashmap of routes from the data structure created by the config
 /// file. This should improve runtime performance and is a better solution than
 /// just iterating over the config object for every hop resolution.
-fn cache_routes(groups: &[RouteGroup]) -> HashMap<String, routes::Route> {
+fn cache_routes(groups: &[RouteGroup]) -> HashMap<String, Route> {
   let mut mapping = HashMap::new();
   for group in groups {
     for (kw, dest) in &group.routes {
@@ -218,11 +218,11 @@ mod cache_routes {
 
   fn generate_external_routes(
     routes: &[(&str, &str)],
-  ) -> HashMap<String, routes::Route> {
+  ) -> HashMap<String, Route> {
     HashMap::from_iter(
       routes
         .iter()
-        .map(|(k, v)| ((*k).into(), routes::Route::External((*v).into()))),
+        .map(|(k, v)| ((*k).into(), Route::External((*v).into()))),
     )
   }
 
