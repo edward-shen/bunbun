@@ -6,7 +6,7 @@
 # file would be part of said release.
 
 pkgname=bunbun
-pkgver=0.5.0
+pkgver=0.6.0
 pkgrel=1
 depends=('gcc-libs')
 makedepends=('rust' 'cargo')
@@ -15,7 +15,7 @@ pkgdesc="Re-implementation of bunny1 in Rust"
 url="https://github.com/edward-shen/bunbun"
 license=('AGPL')
 source=("$pkgname-$pkgver.tar.gz::https://github.com/edward-shen/$pkgname/archive/$pkgver.tar.gz")
-sha512sums=('0ffd666acc2f456eb9f83ca0cfcb9420efbb5c135aae13fab6ff194d86b2bd6ec8d225aa9ab34797be80edc6c4341a299f808e61487e308e39ce91f8435f6692')
+sha512sums=('1fb4648972275cc288a46362f2d0a239a41cda136f45b535fbdfa616f85239b5deb5f623fa3fb5ec413ae0a6e74bf7f5a899ecaebf19bd27b6c1fadf6a19563c')
 
 build() {
   cd "$pkgname-$pkgver"
