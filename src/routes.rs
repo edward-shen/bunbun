@@ -6,11 +6,12 @@ use actix_web::web::{Data, Query};
 use actix_web::{HttpRequest, HttpResponse, Responder};
 use handlebars::Handlebars;
 use itertools::Itertools;
-use log::debug;
+use log::{debug, error};
 use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::fmt;
+use std::process::Command;
 use std::sync::{Arc, RwLock};
 
 /// https://url.spec.whatwg.org/#fragment-percent-encode-set
@@ -112,24 +113,34 @@ pub async fn hop(
   let data = data.read().unwrap();
 
   match resolve_hop(&query.to, &data.routes, &data.default_route) {
-    (Some(path), args) => HttpResponse::Found()
-      .header(
-        header::LOCATION,
-        req
-          .app_data::<Handlebars>()
-          .unwrap()
-          .render_template(
-            match path {
-              Route::Path(s) => s, // TODO: try resolve path
-              Route::External(s) => s,
-            },
-            &template_args::query(
-              utf8_percent_encode(&args, FRAGMENT_ENCODE_SET).to_string(),
-            ),
+    (Some(path), args) => {
+      let resolved_template = match path {
+        Route::Path(path) => resolve_path(path, &args),
+        Route::External(path) => Ok(path.to_owned().into_bytes()),
+      };
+
+      match resolved_template {
+        Ok(path) => HttpResponse::Found()
+          .header(
+            header::LOCATION,
+            req
+              .app_data::<Handlebars>()
+              .unwrap()
+              .render_template(
+                &std::str::from_utf8(&path).unwrap().trim(),
+                &template_args::query(
+                  utf8_percent_encode(&args, FRAGMENT_ENCODE_SET).to_string(),
+                ),
+              )
+              .unwrap(),
           )
-          .unwrap(),
-      )
-      .finish(),
+          .finish(),
+        Err(e) => {
+          error!("Failed to resolve template for path {}: {}", path, e);
+          HttpResponse::InternalServerError().body("Something went wrong :(")
+        }
+      }
+    }
     (None, _) => HttpResponse::NotFound().body("not found"),
   }
 }
@@ -201,6 +212,10 @@ pub async fn index(data: StateData, req: HttpRequest) -> impl Responder {
       )
       .unwrap(),
   )
+}
+
+fn resolve_path(path: &str, args: &str) -> Result<Vec<u8>, crate::BunBunError> {
+  Ok(Command::new(path).arg(args).output()?.stdout)
 }
 
 #[get("/bunbunsearch.xml")]

@@ -15,6 +15,17 @@ default_route: "g"
 # contain "{{query}}", which will be populated by the user's search query. This
 # input is percent-escaped. If multiple routes are defined, then the later
 # defined route is used.
+#
+# You may provide an (absolute, recommended) path to an executable file to out-
+# source route resolution to a program. The program will receive one argument
+# only, which is the entire string provided from the user after matching the
+# route. It is up to the out-sourced program to parse the arguments and to
+# interpret those arguments. These programs should print one line to standard
+# out, which should be a fully resolved URL to lead the user to.
+#
+# These programs must be developed defensively, as they accept arbitrary user
+# input. Improper handling of user input can easily lead to anywhere from simple
+# flakey responses to remote code execution.
 groups:
   -
     name: "Meta commands"
