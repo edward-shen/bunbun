@@ -91,11 +91,43 @@ impl std::fmt::Display for Route {
   }
 }
 
+#[get("/")]
+pub async fn index(data: StateData, req: HttpRequest) -> impl Responder {
+  let data = data.read().unwrap();
+  HttpResponse::Ok().body(
+    req
+      .app_data::<Handlebars>()
+      .unwrap()
+      .render(
+        "index",
+        &template_args::hostname(data.public_address.clone()),
+      )
+      .unwrap(),
+  )
+}
+
+#[get("/bunbunsearch.xml")]
+pub async fn opensearch(data: StateData, req: HttpRequest) -> impl Responder {
+  let data = data.read().unwrap();
+  HttpResponse::Ok()
+    .header(
+      header::CONTENT_TYPE,
+      "application/opensearchdescription+xml",
+    )
+    .body(
+      req
+        .app_data::<Handlebars>()
+        .unwrap()
+        .render(
+          "opensearch",
+          &template_args::hostname(data.public_address.clone()),
+        )
+        .unwrap(),
+    )
+}
+
 #[get("/ls")]
-pub async fn list(
-  data: Data<Arc<RwLock<State>>>,
-  req: HttpRequest,
-) -> impl Responder {
+pub async fn list(data: StateData, req: HttpRequest) -> impl Responder {
   let data = data.read().unwrap();
   HttpResponse::Ok().body(
     req
@@ -206,21 +238,6 @@ fn resolve_hop<'a>(
   }
 }
 
-#[get("/")]
-pub async fn index(data: StateData, req: HttpRequest) -> impl Responder {
-  let data = data.read().unwrap();
-  HttpResponse::Ok().body(
-    req
-      .app_data::<Handlebars>()
-      .unwrap()
-      .render(
-        "index",
-        &template_args::hostname(data.public_address.clone()),
-      )
-      .unwrap(),
-  )
-}
-
 /// Runs the executable with the user's input as a single argument. Returns Ok
 /// so long as the executable was successfully executed. Returns an Error if the
 /// file doesn't exist or bunbun did not have permission to read and execute the
@@ -238,26 +255,6 @@ fn resolve_path(path: PathBuf, args: &str) -> Result<Vec<u8>, BunBunError> {
     let error = String::from_utf8_lossy(&output.stderr);
     Err(BunBunError::CustomProgramError(error.to_string()))
   }
-}
-
-#[get("/bunbunsearch.xml")]
-pub async fn opensearch(data: StateData, req: HttpRequest) -> impl Responder {
-  let data = data.read().unwrap();
-  HttpResponse::Ok()
-    .header(
-      header::CONTENT_TYPE,
-      "application/opensearchdescription+xml",
-    )
-    .body(
-      req
-        .app_data::<Handlebars>()
-        .unwrap()
-        .render(
-          "opensearch",
-          &template_args::hostname(data.public_address.clone()),
-        )
-        .unwrap(),
-    )
 }
 
 #[cfg(test)]

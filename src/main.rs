@@ -287,3 +287,17 @@ mod cache_routes {
     );
   }
 }
+
+#[cfg(test)]
+mod compile_templates {
+  use super::compile_templates;
+
+  /// Successful compilation of the binary guarantees that the templates will be
+  /// present to be registered to. Thus, we only really need to see that
+  /// compilation of the templates don't panic, which is just making sure that
+  /// the function can be successfully called.
+  #[test]
+  fn templates_compile() {
+    let _ = compile_templates();
+  }
+}
