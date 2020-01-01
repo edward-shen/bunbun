@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+mkdir -p out
+
+# shellcheck disable=SC2207
+SHASUM=($(curl -sL "https://github.com/edward-shen/bunbun/archive/$1.tar.gz" | sha512sum))
+HASH="${SHASUM[0]}"
+sed -i "s/^pkgver=.*$/pkgver=$1/; s/sha512sums=('\w*/sha512sums=('$HASH/" PKGBUILD
