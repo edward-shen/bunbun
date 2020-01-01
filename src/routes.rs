@@ -268,3 +268,47 @@ mod resolve_hop {
     );
   }
 }
+
+#[cfg(test)]
+mod resolve_path {
+  use super::resolve_path;
+  use std::env::current_dir;
+  use std::path::PathBuf;
+
+  #[test]
+  fn invalid_path_returns_err() {
+    assert!(resolve_path(PathBuf::from("/bin/aaaa"), "aaaa").is_err());
+  }
+
+  #[test]
+  fn valid_path_returns_ok() {
+    assert!(resolve_path(PathBuf::from("/bin/echo"), "hello").is_ok());
+  }
+
+  #[test]
+  fn relative_path_returns_ok() {
+    // How many ".." needed to get to /
+    let nest_level = current_dir().unwrap().ancestors().count() - 1;
+    let mut rel_path = PathBuf::from("../".repeat(nest_level));
+    rel_path.push("./bin/env");
+    assert!(resolve_path(rel_path, "echo").is_ok());
+  }
+
+  #[test]
+  fn no_permissions_returns_err() {
+    assert!(
+      // Trying to run a command without permission
+      format!(
+        "{}",
+        resolve_path(PathBuf::from("/root/some_exec"), "").unwrap_err()
+      )
+      .contains("Permission denied")
+    );
+  }
+
+  #[test]
+  fn non_success_exit_code_yields_err() {
+    // cat-ing a folder always returns exit code 1
+    assert!(resolve_path(PathBuf::from("/bin/cat"), "/").is_err());
+  }
+}
