@@ -15,7 +15,7 @@ pkgdesc="Re-implementation of bunny1 in Rust"
 url="https://github.com/edward-shen/bunbun"
 license=('AGPL')
 source=("$pkgname-$pkgver.tar.gz::https://github.com/edward-shen/$pkgname/archive/$pkgver.tar.gz")
-sha512sums=('1fb4648972275cc288a46362f2d0a239a41cda136f45b535fbdfa616f85239b5deb5f623fa3fb5ec413ae0a6e74bf7f5a899ecaebf19bd27b6c1fadf6a19563c')
+sha512sums=('f3781cbb4e9e190df38c3fe7fa80ba69bf6f9dbafb158e0426dd4604f2f1ba794450679005a38d0f9f1dad0696e2f22b8b086b2d7d08a0f99bb4fd3b0f7ed5d8')
 
 build() {
   cd "$pkgname-$pkgver"
