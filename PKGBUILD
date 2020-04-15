@@ -6,7 +6,7 @@
 # file would be part of said release.
 
 pkgname=bunbun
-pkgver=0.6.0
+pkgver=0.6.1
 pkgrel=1
 depends=('gcc-libs')
 makedepends=('rust' 'cargo')
