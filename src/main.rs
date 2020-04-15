@@ -4,7 +4,7 @@ use crate::config::{read_config, Route, RouteGroup};
 use actix_web::{middleware::Logger, App, HttpServer};
 use clap::{crate_authors, crate_version, load_yaml, App as ClapApp};
 use error::BunBunError;
-use handlebars::{Output, Handlebars, HelperResult, RenderContext, Context, Helper};
+use handlebars::{Handlebars};
 use hotwatch::{Event, Hotwatch};
 use log::{debug, info, trace, warn};
 use std::cmp::min;
