@@ -4,7 +4,7 @@ use crate::config::{read_config, Route, RouteGroup};
 use actix_web::{middleware::Logger, App, HttpServer};
 use clap::{crate_authors, crate_version, load_yaml, App as ClapApp};
 use error::BunBunError;
-use handlebars::{Handlebars};
+use handlebars::Handlebars;
 use hotwatch::{Event, Hotwatch};
 use log::{debug, info, trace, warn};
 use std::cmp::min;
@@ -118,7 +118,9 @@ fn cache_routes(groups: &[RouteGroup]) -> HashMap<String, Route> {
 fn compile_templates() -> Handlebars {
   let mut handlebars = Handlebars::new();
   handlebars.set_strict_mode(true);
-  handlebars.register_partial("bunbun_version", env!("CARGO_PKG_VERSION")).unwrap();
+  handlebars
+    .register_partial("bunbun_version", env!("CARGO_PKG_VERSION"))
+    .unwrap();
   macro_rules! register_template {
     [ $( $template:expr ),* ] => {
       $(

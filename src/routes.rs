@@ -1,4 +1,5 @@
 use crate::{template_args, BunBunError, Route, State};
+use actix_web::http::header::ContentType;
 use actix_web::web::{Data, Query};
 use actix_web::{get, http::header};
 use actix_web::{HttpRequest, HttpResponse, Responder};
@@ -26,16 +27,18 @@ type StateData = Data<Arc<RwLock<State>>>;
 #[get("/")]
 pub async fn index(data: StateData, req: HttpRequest) -> impl Responder {
   let data = data.read().unwrap();
-  HttpResponse::Ok().body(
-    req
-      .app_data::<Handlebars>()
-      .unwrap()
-      .render(
-        "index",
-        &template_args::hostname(data.public_address.clone()),
-      )
-      .unwrap(),
-  )
+  HttpResponse::Ok()
+    .set_header(header::CONTENT_TYPE, "text/html; charset=utf-8")
+    .body(
+      req
+        .app_data::<Handlebars>()
+        .unwrap()
+        .render(
+          "index",
+          &template_args::hostname(data.public_address.clone()),
+        )
+        .unwrap(),
+    )
 }
 
 #[get("/bunbunsearch.xml")]
@@ -61,13 +64,15 @@ pub async fn opensearch(data: StateData, req: HttpRequest) -> impl Responder {
 #[get("/ls")]
 pub async fn list(data: StateData, req: HttpRequest) -> impl Responder {
   let data = data.read().unwrap();
-  HttpResponse::Ok().body(
-    req
-      .app_data::<Handlebars>()
-      .unwrap()
-      .render("list", &data.groups)
-      .unwrap(),
-  )
+  HttpResponse::Ok()
+    .set_header(header::CONTENT_TYPE, "text/html; charset=utf-8")
+    .body(
+      req
+        .app_data::<Handlebars>()
+        .unwrap()
+        .render("list", &data.groups)
+        .unwrap(),
+    )
 }
 
 #[derive(Deserialize)]
