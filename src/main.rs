@@ -121,6 +121,9 @@ fn compile_templates() -> Handlebars {
   handlebars
     .register_partial("bunbun_version", env!("CARGO_PKG_VERSION"))
     .unwrap();
+  handlebars
+    .register_partial("bunbun_src", env!("CARGO_PKG_REPOSITORY"))
+    .unwrap();
   macro_rules! register_template {
     [ $( $template:expr ),* ] => {
       $(

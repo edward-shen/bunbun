@@ -1,5 +1,4 @@
 use crate::{template_args, BunBunError, Route, State};
-use actix_web::http::header::ContentType;
 use actix_web::web::{Data, Query};
 use actix_web::{get, http::header};
 use actix_web::{HttpRequest, HttpResponse, Responder};
