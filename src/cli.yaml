@@ -17,5 +17,5 @@ args:
   - config:
       short: "c"
       long: "config"
-      default_value: "/etc/bunbun.yaml"
       help: Specify the location of the config file to read from. Needs read/write permissions.
+      takes_value: true
