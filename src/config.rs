@@ -286,7 +286,10 @@ mod route {
     let path = std::path::Path::new(path);
     assert!(path.is_relative());
     let path = path.to_str().unwrap();
-    assert_eq!(from_str::<Route>(path).unwrap(), Route::Path(path.into()));
+    assert_eq!(
+      from_str::<Route>(path).unwrap(),
+      Route::from_str(path).unwrap()
+    );
   }
 
   #[test]
@@ -294,14 +297,17 @@ mod route {
     let tmpfile = NamedTempFile::new().unwrap();
     let path = format!("{}", tmpfile.path().display());
     assert!(tmpfile.path().is_absolute());
-    assert_eq!(from_str::<Route>(&path).unwrap(), Route::Path(path));
+    assert_eq!(
+      from_str::<Route>(&path).unwrap(),
+      Route::from_str(&path).unwrap()
+    );
   }
 
   #[test]
   fn deserialize_http_path() {
     assert_eq!(
       from_str::<Route>("http://google.com").unwrap(),
-      Route::External("http://google.com".into())
+      Route::from_str("http://google.com").unwrap()
     );
   }
 
@@ -309,19 +315,15 @@ mod route {
   fn deserialize_https_path() {
     assert_eq!(
       from_str::<Route>("https://google.com").unwrap(),
-      Route::External("https://google.com".into())
+      Route::from_str("https://google.com").unwrap()
     );
   }
 
   #[test]
   fn serialize() {
     assert_eq!(
-      &to_string(&Route::External("hello world".into())).unwrap(),
-      "---\nhello world"
-    );
-    assert_eq!(
-      &to_string(&Route::Path("hello world".into())).unwrap(),
-      "---\nhello world"
+      &to_string(&Route::from_str("hello world").unwrap()).unwrap(),
+      "---\nroute_type: External\npath: hello world\nhidden: false\ndescription: ~"
     );
   }
 }

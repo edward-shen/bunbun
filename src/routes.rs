@@ -205,6 +205,7 @@ fn resolve_path(path: PathBuf, args: &str) -> Result<Vec<u8>, BunBunError> {
 #[cfg(test)]
 mod resolve_hop {
   use super::*;
+  use std::str::FromStr;
 
   fn generate_route_result<'a>(
     keyword: &'a Route,
@@ -238,12 +239,12 @@ mod resolve_hop {
     let mut map: HashMap<String, Route> = HashMap::new();
     map.insert(
       "google".into(),
-      Route::External("https://example.com".into()),
+      Route::from_str("https://example.com").unwrap(),
     );
     assert_eq!(
       resolve_hop("hello world", &map, &Some(String::from("google"))),
       generate_route_result(
-        &Route::External("https://example.com".into()),
+        &Route::from_str("https://example.com").unwrap(),
         "hello world"
       ),
     );
@@ -254,12 +255,12 @@ mod resolve_hop {
     let mut map: HashMap<String, Route> = HashMap::new();
     map.insert(
       "google".into(),
-      Route::External("https://example.com".into()),
+      Route::from_str("https://example.com").unwrap(),
     );
     assert_eq!(
       resolve_hop("google hello world", &map, &Some(String::from("a"))),
       generate_route_result(
-        &Route::External("https://example.com".into()),
+        &Route::from_str("https://example.com").unwrap(),
         "hello world"
       ),
     );
@@ -270,12 +271,12 @@ mod resolve_hop {
     let mut map: HashMap<String, Route> = HashMap::new();
     map.insert(
       "google".into(),
-      Route::External("https://example.com".into()),
+      Route::from_str("https://example.com").unwrap(),
     );
     assert_eq!(
       resolve_hop("google hello world", &map, &None),
       generate_route_result(
-        &Route::External("https://example.com".into()),
+        &Route::from_str("https://example.com").unwrap(),
         "hello world"
       ),
     );

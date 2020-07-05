@@ -248,14 +248,15 @@ mod init_logger {
 mod cache_routes {
   use super::*;
   use std::iter::FromIterator;
+  use std::str::FromStr;
 
   fn generate_external_routes(
     routes: &[(&str, &str)],
   ) -> HashMap<String, Route> {
     HashMap::from_iter(
       routes
-        .iter()
-        .map(|(k, v)| ((*k).into(), Route::External((*v).into()))),
+        .into_iter()
+        .map(|kv| (kv.0.into(), Route::from_str(kv.1).unwrap())),
     )
   }
 
@@ -270,12 +271,14 @@ mod cache_routes {
       name: String::from("x"),
       description: Some(String::from("y")),
       routes: generate_external_routes(&[("a", "b"), ("c", "d")]),
+      hidden: false,
     };
 
     let group2 = RouteGroup {
       name: String::from("5"),
       description: Some(String::from("6")),
       routes: generate_external_routes(&[("1", "2"), ("3", "4")]),
+      hidden: false,
     };
 
     assert_eq!(
@@ -295,12 +298,14 @@ mod cache_routes {
       name: String::from("x"),
       description: Some(String::from("y")),
       routes: generate_external_routes(&[("a", "b"), ("c", "d")]),
+      hidden: false,
     };
 
     let group2 = RouteGroup {
       name: String::from("5"),
       description: Some(String::from("6")),
       routes: generate_external_routes(&[("a", "1"), ("c", "2")]),
+      hidden: false,
     };
 
     assert_eq!(
@@ -312,6 +317,7 @@ mod cache_routes {
       name: String::from("5"),
       description: Some(String::from("6")),
       routes: generate_external_routes(&[("a", "1"), ("b", "2")]),
+      hidden: false,
     };
 
     assert_eq!(
