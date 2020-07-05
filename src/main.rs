@@ -12,7 +12,7 @@ use crate::config::{
 use actix_web::{middleware::Logger, App, HttpServer};
 use clap::Clap;
 use error::BunBunError;
-use handlebars::Handlebars;
+use handlebars::{Handlebars, TemplateError};
 use hotwatch::{Event, Hotwatch};
 use log::{debug, error, info, trace, warn};
 use std::cmp::min;
@@ -65,12 +65,18 @@ async fn run() -> Result<(), BunBunError> {
     groups: conf.groups,
   }));
 
-  let _watch = start_watch(state.clone(), conf_data)?;
+  let _watch = start_watch(Arc::clone(&state), conf_data)?;
 
   HttpServer::new(move || {
+    let templates = match compile_templates() {
+      Ok(templates) => templates,
+      // This implies a template error, which should be a compile time error. If
+      // we reach here then the release is very broken.
+      Err(e) => unreachable!("Failed to compile templates: {}", e),
+    };
     App::new()
-      .data(state.clone())
-      .app_data(compile_templates())
+      .data(Arc::clone(&state))
+      .app_data(templates)
       .wrap(Logger::default())
       .service(routes::hop)
       .service(routes::list)
@@ -130,15 +136,11 @@ fn cache_routes(groups: &[RouteGroup]) -> HashMap<String, Route> {
 /// Returns an instance with all pre-generated templates included into the
 /// binary. This allows for users to have a portable binary without needed the
 /// templates at runtime.
-fn compile_templates() -> Handlebars {
+fn compile_templates() -> Result<Handlebars, TemplateError> {
   let mut handlebars = Handlebars::new();
   handlebars.set_strict_mode(true);
-  handlebars
-    .register_partial("bunbun_version", env!("CARGO_PKG_VERSION"))
-    .unwrap();
-  handlebars
-    .register_partial("bunbun_src", env!("CARGO_PKG_REPOSITORY"))
-    .unwrap();
+  handlebars.register_partial("bunbun_version", env!("CARGO_PKG_VERSION"))?;
+  handlebars.register_partial("bunbun_src", env!("CARGO_PKG_REPOSITORY"))?;
   macro_rules! register_template {
     [ $( $template:expr ),* ] => {
       $(
@@ -147,14 +149,13 @@ fn compile_templates() -> Handlebars {
             $template,
             String::from_utf8_lossy(
               include_bytes!(concat!("templates/", $template, ".hbs")))
-          )
-          .unwrap();
+          )?;
         debug!("Loaded {} template.", $template);
       )*
     };
   }
   register_template!["index", "list", "opensearch"];
-  handlebars
+  Ok(handlebars)
 }
 
 /// Starts the watch on a file, if possible. This will only return an Error if
