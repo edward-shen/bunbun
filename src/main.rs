@@ -10,16 +10,17 @@ use crate::config::{
   RouteGroup,
 };
 use actix_web::{middleware::Logger, App, HttpServer};
-use clap::{crate_authors, crate_version, load_yaml, App as ClapApp};
+use clap::Clap;
 use error::BunBunError;
 use handlebars::Handlebars;
 use hotwatch::{Event, Hotwatch};
-use log::{debug, info, trace, warn};
+use log::{debug, error, info, trace, warn};
 use std::cmp::min;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
+mod cli;
 mod config;
 mod error;
 mod routes;
@@ -36,20 +37,22 @@ pub struct State {
 }
 
 #[actix_rt::main]
-async fn main() -> Result<(), BunBunError> {
-  let yaml = load_yaml!("cli.yaml");
-  let matches = ClapApp::from(yaml)
-    .version(crate_version!())
-    .author(crate_authors!())
-    .get_matches();
+async fn main() {
+  std::process::exit(match run().await {
+    Ok(_) => 0,
+    Err(e) => {
+      error!("{}", e);
+      1
+    }
+  })
+}
 
-  init_logger(
-    matches.occurrences_of("verbose"),
-    matches.occurrences_of("quiet"),
-  )?;
+async fn run() -> Result<(), BunBunError> {
+  let opts = cli::Opts::parse();
 
-  // config has default location provided, unwrapping is fine.
-  let conf_data = match matches.value_of("config") {
+  init_logger(opts.verbose, opts.quiet)?;
+
+  let conf_data = match opts.config {
     Some(file_name) => load_custom_path_config(file_name),
     None => get_config_data(),
   }?;
@@ -85,8 +88,8 @@ async fn main() -> Result<(), BunBunError> {
 /// in. Usually, these values are mutually exclusive, that is, if the number of
 /// verbose flags is non-zero then the quiet flag is zero, and vice versa.
 fn init_logger(
-  num_verbose_flags: u64,
-  num_quiet_flags: u64,
+  num_verbose_flags: u8,
+  num_quiet_flags: u8,
 ) -> Result<(), BunBunError> {
   let log_level =
     match min(num_verbose_flags, 3) as i8 - min(num_quiet_flags, 2) as i8 {
