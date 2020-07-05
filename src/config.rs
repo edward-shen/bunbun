@@ -111,10 +111,14 @@ pub fn get_config_data() -> Result<ConfigData, BunBunError> {
     let mut folders = vec![PathBuf::from("/etc/")];
 
     // Config folder
-    if let Some(folder) = config_dir() { folders.push(folder) }
+    if let Some(folder) = config_dir() {
+      folders.push(folder)
+    }
 
     // Home folder
-    if let Some(folder) = home_dir() { folders.push(folder) }
+    if let Some(folder) = home_dir() {
+      folders.push(folder)
+    }
 
     folders
       .iter_mut()
@@ -133,12 +137,11 @@ pub fn get_config_data() -> Result<ConfigData, BunBunError> {
         return Ok(ConfigData {
           path: location.clone(),
           file,
-        })
+        });
       }
       Err(e) => debug!(
         "Tried to read '{:?}' but failed due to error: {}",
-        location,
-        e
+        location, e
       ),
     }
   }
@@ -166,8 +169,7 @@ pub fn get_config_data() -> Result<ConfigData, BunBunError> {
       }
       Err(e) => debug!(
         "Tried to open a new file at '{:?}' but failed due to error: {}",
-        location,
-        e
+        location, e
       ),
     }
   }
@@ -181,10 +183,12 @@ pub fn load_custom_path_config(
   path: impl Into<PathBuf>,
 ) -> Result<ConfigData, BunBunError> {
   let path = path.into();
-  Ok(ConfigData {
-    file: OpenOptions::new().read(true).open(&path)?,
-    path,
-  })
+  let file = OpenOptions::new()
+    .read(true)
+    .open(&path)
+    .map_err(|e| BunBunError::InvalidConfigPath(path.clone(), e))?;
+
+  Ok(ConfigData { file, path })
 }
 
 pub fn read_config(mut config_file: File) -> Result<Config, BunBunError> {

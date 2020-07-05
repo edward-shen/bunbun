@@ -9,7 +9,8 @@ pub enum BunBunError {
   WatchError(hotwatch::Error),
   LoggerInitError(log::SetLoggerError),
   CustomProgramError(String),
-  NoValidConfigPath
+  NoValidConfigPath,
+  InvalidConfigPath(std::path::PathBuf, std::io::Error),
 }
 
 impl Error for BunBunError {}
@@ -23,6 +24,9 @@ impl fmt::Display for BunBunError {
       Self::LoggerInitError(e) => e.fmt(f),
       Self::CustomProgramError(msg) => write!(f, "{}", msg),
       Self::NoValidConfigPath => write!(f, "No valid config path was found!"),
+      Self::InvalidConfigPath(path, reason) => {
+        write!(f, "Failed to access {:?}: {}", path, reason)
+      }
     }
   }
 }
