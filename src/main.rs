@@ -57,7 +57,7 @@ async fn run() -> Result<(), BunBunError> {
     None => get_config_data(),
   }?;
 
-  let conf = read_config(conf_data.file.try_clone()?)?;
+  let conf = read_config(conf_data.file.try_clone()?, opts.large_config)?;
   let state = Arc::from(RwLock::new(State {
     public_address: conf.public_address,
     default_route: conf.default_route,
@@ -65,7 +65,7 @@ async fn run() -> Result<(), BunBunError> {
     groups: conf.groups,
   }));
 
-  let _watch = start_watch(Arc::clone(&state), conf_data)?;
+  let _watch = start_watch(Arc::clone(&state), conf_data, opts.large_config)?;
 
   HttpServer::new(move || {
     let templates = match compile_templates() {
@@ -170,6 +170,7 @@ fn compile_templates() -> Result<Handlebars, TemplateError> {
 fn start_watch(
   state: Arc<RwLock<State>>,
   config_data: ConfigData,
+  large_config: bool,
 ) -> Result<Hotwatch, BunBunError> {
   let mut watch = Hotwatch::new_with_custom_delay(Duration::from_millis(500))?;
   let ConfigData { path, file } = config_data;
@@ -178,8 +179,10 @@ fn start_watch(
       trace!("Grabbing writer lock on state...");
       let mut state = state.write().expect("Failed to get write lock on state");
       trace!("Obtained writer lock on state!");
-      match read_config(file.try_clone().expect("Failed to clone file handle"))
-      {
+      match read_config(
+        file.try_clone().expect("Failed to clone file handle"),
+        large_config,
+      ) {
         Ok(conf) => {
           state.public_address = conf.public_address;
           state.default_route = conf.default_route;

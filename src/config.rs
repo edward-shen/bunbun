@@ -263,8 +263,22 @@ pub fn load_custom_path_config(
   Ok(ConfigData { file, path })
 }
 
-pub fn read_config(mut config_file: File) -> Result<Config, BunBunError> {
+pub fn read_config(
+  mut config_file: File,
+  large_config: bool,
+) -> Result<Config, BunBunError> {
   trace!("Loading config file.");
+  let file_size = config_file.metadata()?.len();
+
+  // 100 MB
+  if file_size > 100_000_000 && !large_config {
+    return Err(BunBunError::ConfigTooLarge(file_size));
+  }
+
+  if file_size == 0 {
+    return Err(BunBunError::ZeroByteConfig);
+  }
+
   let mut config_data = String::new();
   config_file.read_to_string(&mut config_data)?;
   // Reading from memory is faster than reading directly from a reader for some

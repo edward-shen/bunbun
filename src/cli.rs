@@ -13,4 +13,7 @@ pub struct Opts {
   /// Specify the location of the config file to read from. Needs read/write permissions.
   #[clap(short, long)]
   pub config: Option<PathBuf>,
+  /// Allow config sizes larger than 100MB.
+  #[clap(long)]
+  pub large_config: bool,
 }

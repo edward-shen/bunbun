@@ -10,6 +10,8 @@ pub enum BunBunError {
   CustomProgram(String),
   NoValidConfigPath,
   InvalidConfigPath(std::path::PathBuf, std::io::Error),
+  ConfigTooLarge(u64),
+  ZeroByteConfig,
 }
 
 impl Error for BunBunError {}
@@ -26,6 +28,8 @@ impl fmt::Display for BunBunError {
       Self::InvalidConfigPath(path, reason) => {
         write!(f, "Failed to access {:?}: {}", path, reason)
       }
+      Self::ConfigTooLarge(size) => write!(f, "The config file was too large ({} bytes)! Pass in --large-config to bypass this check.", size),
+      Self::ZeroByteConfig => write!(f, "The config provided reported a size of 0 bytes. Please check your config path!")
     }
   }
 }
