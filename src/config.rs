@@ -40,12 +40,6 @@ pub struct Route {
   pub description: Option<String>,
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize)]
-pub enum RouteType {
-  External,
-  Internal,
-}
-
 impl FromStr for Route {
   type Err = std::convert::Infallible;
   fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -138,16 +132,6 @@ impl<'de> Deserialize<'de> for Route {
   }
 }
 
-fn get_route_type(path: &str) -> RouteType {
-  if std::path::Path::new(path).exists() {
-    debug!("Parsed {} as a valid local path.", path);
-    RouteType::Internal
-  } else {
-    debug!("{} does not exist on disk, assuming web path.", path);
-    RouteType::External
-  }
-}
-
 impl std::fmt::Display for Route {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
@@ -163,6 +147,25 @@ impl std::fmt::Display for Route {
       } => write!(f, "file ({})", path),
     }
   }
+}
+
+/// Classifies the path depending on if the there exists a local file.
+fn get_route_type(path: &str) -> RouteType {
+  if std::path::Path::new(path).exists() {
+    debug!("Parsed {} as a valid local path.", path);
+    RouteType::Internal
+  } else {
+    debug!("{} does not exist on disk, assuming web path.", path);
+    RouteType::External
+  }
+}
+
+/// There exists two route types: an external path (e.g. a URL) or an internal
+/// path (to a file).
+#[derive(Debug, PartialEq, Clone, Serialize)]
+pub enum RouteType {
+  External,
+  Internal,
 }
 
 pub struct ConfigData {
@@ -261,7 +264,7 @@ pub fn load_custom_path_config(
 }
 
 pub fn read_config(mut config_file: File) -> Result<Config, BunBunError> {
-  trace!("Loading config file...");
+  trace!("Loading config file.");
   let mut config_data = String::new();
   config_file.read_to_string(&mut config_data)?;
   // Reading from memory is faster than reading directly from a reader for some
