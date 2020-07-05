@@ -1,3 +1,4 @@
+use crate::config::{Route as ConfigRoute, RouteType};
 use crate::{template_args, BunBunError, Route, State};
 use actix_web::web::{Data, Query};
 use actix_web::{get, http::header};
@@ -90,8 +91,16 @@ pub async fn hop(
   match resolve_hop(&query.to, &data.routes, &data.default_route) {
     (Some(path), args) => {
       let resolved_template = match path {
-        Route::Path(path) => resolve_path(PathBuf::from(path), &args),
-        Route::External(path) => Ok(path.to_owned().into_bytes()),
+        ConfigRoute {
+          route_type: RouteType::Internal,
+          path,
+          ..
+        } => resolve_path(PathBuf::from(path), &args),
+        ConfigRoute {
+          route_type: RouteType::External,
+          path,
+          ..
+        } => Ok(path.to_owned().into_bytes()),
       };
 
       match resolved_template {

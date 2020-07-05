@@ -20,7 +20,7 @@
       i { color: rgba(255, 255, 255, 0.5); }
       td, th { padding: 0 0.5rem; }
       .shortcut { text-align: right; }
-      .target { text-align: left; width: 100%; }
+      .description { text-align: left; width: 100%; }
       footer {
         margin-top: 1rem;
         color: #444;
@@ -31,16 +31,29 @@
     <h1>Bunbun Command List</h1>
     <p><i>To edit this list, edit your <code>bunbun.yaml</code> file.</i></p>
     <main>
-      {{#each this}} {{!-- Iterate over RouteGroup --}}
-      <header><h2>{{this.name}}</h2><i>{{this.description}}</i></header>
-      <table>
-        <tr>
-          <th>Shortcut</th>
-          <th class="target">Target</th>
-        </tr>
-        {{#each this.routes}}<tr><td class="shortcut">{{@key}}</td><td class="target">{{this}}</td></tr>{{/each}}
-      </table>
-      {{/each}}
+      {{~#each this}} {{!-- Iterate over RouteGroup --}}
+      {{~#unless this.hidden}}
+        <header><h2>{{this.name}}</h2><i>{{this.description}}</i></header>
+        <table>
+          <tr>
+            <th>Shortcut</th>
+            <th class="description">Description</th>
+          </tr>
+          {{~#each this.routes}} {{!-- Iterate over Route --}}
+          {{~#unless this.hidden}}
+          <tr>
+            <td class="shortcut">{{@key}}</td>
+            {{~#if this.description~}}
+              <td class="description">{{this.description}}</td>
+            {{~else~}}
+              <td class="description">{{this.path}}</td>
+            {{~/if}}
+          </tr>
+          {{~/unless}}
+          {{~/each}}
+        </table>
+      {{~/unless}}
+      {{~/each}}
     </main>
   </body>
   <footer>

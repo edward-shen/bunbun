@@ -2,14 +2,15 @@ use crate::BunBunError;
 use dirs::{config_dir, home_dir};
 use log::{debug, info, trace};
 use serde::{
-  de::{Deserializer, Visitor},
-  Deserialize, Serialize, Serializer,
+  de::{self, Deserializer, MapAccess, Visitor},
+  Deserialize, Serialize,
 };
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::PathBuf;
+use std::str::FromStr;
 
 const CONFIG_FILENAME: &str = "bunbun.yaml";
 const DEFAULT_CONFIG: &[u8] = include_bytes!("../bunbun.default.yaml");
@@ -26,27 +27,34 @@ pub struct Config {
 pub struct RouteGroup {
   pub name: String,
   pub description: Option<String>,
+  #[serde(default)]
+  pub hidden: bool,
   pub routes: HashMap<String, Route>,
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub enum Route {
-  External(String),
-  Path(String),
+#[derive(Debug, PartialEq, Clone, Serialize)]
+pub struct Route {
+  pub route_type: RouteType,
+  pub path: String,
+  pub hidden: bool,
+  pub description: Option<String>,
 }
 
-/// Serialization of the Route enum needs to be transparent, but since the
-/// `#[serde(transparent)]` macro isn't available on enums, so we need to
-/// implement it manually.
-impl Serialize for Route {
-  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-  where
-    S: Serializer,
-  {
-    match self {
-      Self::External(s) => serializer.serialize_str(s),
-      Self::Path(s) => serializer.serialize_str(s),
-    }
+#[derive(Debug, PartialEq, Clone, Serialize)]
+pub enum RouteType {
+  External,
+  Internal,
+}
+
+impl FromStr for Route {
+  type Err = std::convert::Infallible;
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    Ok(Self {
+      route_type: get_route_type(s),
+      path: s.to_string(),
+      hidden: false,
+      description: None,
+    })
   }
 }
 
@@ -60,7 +68,16 @@ impl<'de> Deserialize<'de> for Route {
   where
     D: Deserializer<'de>,
   {
+    #[derive(Deserialize)]
+    #[serde(field_identifier, rename_all = "lowercase")]
+    enum Field {
+      Path,
+      Hidden,
+      Description,
+    }
+
     struct RouteVisitor;
+
     impl<'de> Visitor<'de> for RouteVisitor {
       type Value = Route;
 
@@ -68,30 +85,82 @@ impl<'de> Deserialize<'de> for Route {
         formatter.write_str("string")
       }
 
-      fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+      fn visit_str<E>(self, path: &str) -> Result<Self::Value, E>
       where
         E: serde::de::Error,
       {
-        // Return early if it's a path, don't go through URL parsing
-        if std::path::Path::new(value).exists() {
-          debug!("Parsed {} as a valid local path.", value);
-          Ok(Route::Path(value.into()))
-        } else {
-          debug!("{} does not exist on disk, assuming web path.", value);
-          Ok(Route::External(value.into()))
+        // This is infalliable
+        Ok(Self::Value::from_str(path).unwrap())
+      }
+
+      fn visit_map<M>(self, mut map: M) -> Result<Self::Value, M::Error>
+      where
+        M: MapAccess<'de>,
+      {
+        let mut path = None;
+        let mut hidden = None;
+        let mut description = None;
+
+        while let Some(key) = map.next_key()? {
+          match key {
+            Field::Path => {
+              if path.is_some() {
+                return Err(de::Error::duplicate_field("path"));
+              }
+              path = Some(map.next_value::<String>()?);
+            }
+            Field::Hidden => {
+              if hidden.is_some() {
+                return Err(de::Error::duplicate_field("hidden"));
+              }
+              hidden = map.next_value()?;
+            }
+            Field::Description => {
+              if description.is_some() {
+                return Err(de::Error::duplicate_field("description"));
+              }
+              description = Some(map.next_value()?);
+            }
+          }
         }
+
+        let path = path.ok_or_else(|| de::Error::missing_field("path"))?;
+        Ok(Route {
+          route_type: get_route_type(&path),
+          path,
+          hidden: hidden.unwrap_or_default(),
+          description,
+        })
       }
     }
 
-    deserializer.deserialize_str(RouteVisitor)
+    deserializer.deserialize_any(RouteVisitor)
+  }
+}
+
+fn get_route_type(path: &str) -> RouteType {
+  if std::path::Path::new(path).exists() {
+    debug!("Parsed {} as a valid local path.", path);
+    RouteType::Internal
+  } else {
+    debug!("{} does not exist on disk, assuming web path.", path);
+    RouteType::External
   }
 }
 
 impl std::fmt::Display for Route {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
-      Self::External(s) => write!(f, "raw ({})", s),
-      Self::Path(s) => write!(f, "file ({})", s),
+      Self {
+        route_type: RouteType::External,
+        path,
+        ..
+      } => write!(f, "raw ({})", path),
+      Self {
+        route_type: RouteType::Internal,
+        path,
+        ..
+      } => write!(f, "file ({})", path),
     }
   }
 }
