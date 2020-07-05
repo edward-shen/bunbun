@@ -2,13 +2,12 @@ use std::error::Error;
 use std::fmt;
 
 #[derive(Debug)]
-#[allow(clippy::enum_variant_names)]
 pub enum BunBunError {
-  IoError(std::io::Error),
-  ParseError(serde_yaml::Error),
-  WatchError(hotwatch::Error),
-  LoggerInitError(log::SetLoggerError),
-  CustomProgramError(String),
+  Io(std::io::Error),
+  Parse(serde_yaml::Error),
+  Watch(hotwatch::Error),
+  LoggerInit(log::SetLoggerError),
+  CustomProgram(String),
   NoValidConfigPath,
   InvalidConfigPath(std::path::PathBuf, std::io::Error),
 }
@@ -18,11 +17,11 @@ impl Error for BunBunError {}
 impl fmt::Display for BunBunError {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match self {
-      Self::IoError(e) => e.fmt(f),
-      Self::ParseError(e) => e.fmt(f),
-      Self::WatchError(e) => e.fmt(f),
-      Self::LoggerInitError(e) => e.fmt(f),
-      Self::CustomProgramError(msg) => write!(f, "{}", msg),
+      Self::Io(e) => e.fmt(f),
+      Self::Parse(e) => e.fmt(f),
+      Self::Watch(e) => e.fmt(f),
+      Self::LoggerInit(e) => e.fmt(f),
+      Self::CustomProgram(msg) => write!(f, "{}", msg),
       Self::NoValidConfigPath => write!(f, "No valid config path was found!"),
       Self::InvalidConfigPath(path, reason) => {
         write!(f, "Failed to access {:?}: {}", path, reason)
@@ -43,7 +42,7 @@ macro_rules! from_error {
   };
 }
 
-from_error!(std::io::Error, IoError);
-from_error!(serde_yaml::Error, ParseError);
-from_error!(hotwatch::Error, WatchError);
-from_error!(log::SetLoggerError, LoggerInitError);
+from_error!(std::io::Error, Io);
+from_error!(serde_yaml::Error, Parse);
+from_error!(hotwatch::Error, Watch);
+from_error!(log::SetLoggerError, LoggerInit);

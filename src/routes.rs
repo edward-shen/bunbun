@@ -189,7 +189,7 @@ fn resolve_path(path: PathBuf, args: &str) -> Result<Vec<u8>, BunBunError> {
       path.display(),
     );
     let error = String::from_utf8_lossy(&output.stderr);
-    Err(BunBunError::CustomProgramError(error.to_string()))
+    Err(BunBunError::CustomProgram(error.to_string()))
   }
 }
 
