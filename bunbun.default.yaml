@@ -28,19 +28,42 @@ default_route: "g"
 # flakey responses to remote code execution.
 groups:
   -
+    # This is a group with the name "Meta commands" with a short description.
     name: "Meta commands"
     description: "Commands for bunbun"
     routes:
+      # /ls is the only page that comes with bunbun besides the homepage. This
+      # page provides a full list of routes and their groups they're in.
       ls: &ls "/ls"
-      help: *ls
+      help:
+        # Bunbun supports all standard YAML features, so things like YAML pointers
+        # and references are supported.
+        path: *ls
+        # Paths can be hidden from the listings page if desired.
+        hidden: true
       list: *ls
   -
+    # This is another group without a description
     name: "Google"
     routes:
+      # Routes can be quickly defined as a simple link, where {{query}} is where
+      # your query to bunbun is forwarded to.
       g: "https://google.com/search?q={{query}}"
-      yt: "https://www.youtube.com/results?search_query={{query}}"
+      # Alternatively, you can provide a description instead, which provides
+      # replaces the raw query string on the ls page with said description
+      yt:
+        path: "https://www.youtube.com/results?search_query={{query}}"
+        description: "A way to quickly search youtube videos"
   -
     name: "Uncategorized routes"
-    description: "One-off routes with no specific grouping"
     routes:
       r: "https://reddit.com/r/{{query}}"
+      # Routes don't need the {{query}} tag, so links can just be shortcuts to
+      # pages you'd like
+      nice: "https://youtu.be/dQw4w9WgXcQ"
+  -
+    # This group is entirely hidden, so all routes under it are hidden.
+    name: "Hidden group"
+    hidden: true
+    routes:
+      sneaky: "https://nyan.cat"
