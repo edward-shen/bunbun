@@ -1,4 +1,9 @@
 #![forbid(unsafe_code)]
+#![deny(missing_docs)]
+
+//! Bunbun is a pure-Rust implementation of bunny1 that provides a customizable
+//! search engine and quick-jump tool in one small binary. For information on
+//! usage, please take a look at the readme.
 
 use crate::config::{
   get_config_data, load_custom_path_config, read_config, ConfigData, Route,
