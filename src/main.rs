@@ -171,22 +171,14 @@ fn start_watch(
   config_data: ConfigData,
 ) -> Result<Hotwatch, BunBunError> {
   let mut watch = Hotwatch::new_with_custom_delay(Duration::from_millis(500))?;
-
-  // Closures need their own copy of variables for proper life cycle management
-  let config_data = Arc::new(config_data);
-  let config_data_ref = Arc::clone(&config_data);
-
-  let watch_result = watch.watch(&config_data.path, move |e: Event| {
+  let ConfigData { path, file } = config_data;
+  let watch_result = watch.watch(&path, move |e: Event| {
     if let Event::Write(_) = e {
       trace!("Grabbing writer lock on state...");
       let mut state = state.write().expect("Failed to get write lock on state");
       trace!("Obtained writer lock on state!");
-      match read_config(
-        config_data_ref
-          .file
-          .try_clone()
-          .expect("Failed to clone file handle"),
-      ) {
+      match read_config(file.try_clone().expect("Failed to clone file handle"))
+      {
         Ok(conf) => {
           state.public_address = conf.public_address;
           state.default_route = conf.default_route;
@@ -202,10 +194,10 @@ fn start_watch(
   });
 
   match watch_result {
-    Ok(_) => info!("Watcher is now watching {:?}", &config_data.path),
+    Ok(_) => info!("Watcher is now watching {:?}", &path),
     Err(e) => warn!(
       "Couldn't watch {:?}: {}. Changes to this file won't be seen!",
-      &config_data.path, e
+      &path, e
     ),
   }
 
