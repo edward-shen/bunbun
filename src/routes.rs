@@ -4,7 +4,6 @@ use actix_web::web::{Data, Query};
 use actix_web::{get, http::header};
 use actix_web::{HttpRequest, HttpResponse, Responder};
 use handlebars::Handlebars;
-use itertools::Itertools;
 use log::{debug, error};
 use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use serde::Deserialize;
@@ -156,7 +155,7 @@ fn resolve_hop<'a>(
       match split_args.next() {
         // Discard the first result, we found the route using the first arg
         Some(_) => {
-          let args = split_args.join(" ");
+          let args = split_args.collect::<Vec<&str>>().join(" ");
           debug!("Resolved {} with args {}", resolved, args);
           args
         }
@@ -168,7 +167,7 @@ fn resolve_hop<'a>(
     ),
     // Unable to find route, but had a default route
     (None, Some(route)) => {
-      let args = split_args.join(" ");
+      let args = split_args.collect::<Vec<&str>>().join(" ");
       debug!("Using default route {} with args {}", route, args);
       match routes.get(route) {
         Some(v) => (Some(v), args),
