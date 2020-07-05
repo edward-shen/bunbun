@@ -1,14 +1,17 @@
 use crate::BunBunError;
-use log::{debug, error, info, trace};
+use dirs::{config_dir, home_dir};
+use log::{debug, info, trace};
 use serde::{
   de::{Deserializer, Visitor},
   Deserialize, Serialize, Serializer,
 };
 use std::collections::HashMap;
 use std::fmt;
-use std::fs::{read_to_string, OpenOptions};
-use std::io::Write;
+use std::fs::{File, OpenOptions};
+use std::io::{Read, Write};
+use std::path::PathBuf;
 
+const CONFIG_FILENAME: &str = "bunbun.yaml";
 const DEFAULT_CONFIG: &[u8] = include_bytes!("../bunbun.default.yaml");
 
 #[derive(Deserialize, Debug, PartialEq)]
@@ -93,40 +96,104 @@ impl std::fmt::Display for Route {
   }
 }
 
-/// Attempts to read the config file. If it doesn't exist, generate one a
-/// default config file before attempting to parse it.
-pub fn read_config(config_file_path: &str) -> Result<Config, BunBunError> {
-  trace!("Loading config file...");
-  let config_str = match read_to_string(config_file_path) {
-    Ok(conf_str) => {
-      debug!("Successfully loaded config file into memory.");
-      conf_str
-    }
-    Err(_) => {
-      info!(
-        "Unable to find a {} file. Creating default!",
-        config_file_path
-      );
+pub struct ConfigData {
+  pub path: PathBuf,
+  pub file: File,
+}
 
-      let fd = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(config_file_path);
+/// If a provided config path isn't found, this function checks known good
+/// locations for a place to write a config file to. In order, it checks the
+/// system-wide config location (`/etc/`, in Linux), followed by the config
+/// folder, followed by the user's home folder.
+pub fn get_config_data() -> Result<ConfigData, BunBunError> {
+  // Locations to check, with highest priority first
+  let locations: Vec<_> = {
+    let mut folders = vec![PathBuf::from("/etc/")];
 
-      match fd {
-        Ok(mut fd) => fd.write_all(DEFAULT_CONFIG)?,
-        Err(e) => {
-          error!("Failed to write to {}: {}. Default config will be loaded but not saved.", config_file_path, e);
-        }
-      };
+    // Config folder
+    if let Some(folder) = config_dir() { folders.push(folder) }
 
-      String::from_utf8_lossy(DEFAULT_CONFIG).into_owned()
-    }
+    // Home folder
+    if let Some(folder) = home_dir() { folders.push(folder) }
+
+    folders
+      .iter_mut()
+      .for_each(|folder| folder.push(CONFIG_FILENAME));
+
+    folders
   };
 
+  debug!("Checking locations for config file: {:?}", &locations);
+
+  for location in &locations {
+    let file = OpenOptions::new().read(true).open(location.clone());
+    match file {
+      Ok(file) => {
+        debug!("Found file at {:?}.", location);
+        return Ok(ConfigData {
+          path: location.clone(),
+          file,
+        })
+      }
+      Err(e) => debug!(
+        "Tried to read '{:?}' but failed due to error: {}",
+        location,
+        e
+      ),
+    }
+  }
+
+  debug!("Failed to find any config. Now trying to find first writable path");
+
+  // If we got here, we failed to read any file paths, meaning no config exists
+  // yet. In that case, try to return the first location that we can write to,
+  // after writing the default config
+  for location in locations {
+    let file = OpenOptions::new()
+      .write(true)
+      .create_new(true)
+      .open(location.clone());
+    match file {
+      Ok(mut file) => {
+        info!("Creating new config file at {:?}.", location);
+        file.write_all(DEFAULT_CONFIG)?;
+
+        let file = OpenOptions::new().read(true).open(location.clone())?;
+        return Ok(ConfigData {
+          path: location,
+          file,
+        });
+      }
+      Err(e) => debug!(
+        "Tried to open a new file at '{:?}' but failed due to error: {}",
+        location,
+        e
+      ),
+    }
+  }
+
+  Err(BunBunError::NoValidConfigPath)
+}
+
+/// Assumes that the user knows what they're talking about and will only try
+/// to load the config at the given path.
+pub fn load_custom_path_config(
+  path: impl Into<PathBuf>,
+) -> Result<ConfigData, BunBunError> {
+  let path = path.into();
+  Ok(ConfigData {
+    file: OpenOptions::new().read(true).open(&path)?,
+    path,
+  })
+}
+
+pub fn read_config(mut config_file: File) -> Result<Config, BunBunError> {
+  trace!("Loading config file...");
+  let mut config_data = String::new();
+  config_file.read_to_string(&mut config_data)?;
   // Reading from memory is faster than reading directly from a reader for some
   // reason; see https://github.com/serde-rs/json/issues/160
-  Ok(serde_yaml::from_str(&config_str)?)
+  Ok(serde_yaml::from_str(&config_data)?)
 }
 
 #[cfg(test)]
@@ -180,79 +247,5 @@ mod route {
       &to_string(&Route::Path("hello world".into())).unwrap(),
       "---\nhello world"
     );
-  }
-}
-
-#[cfg(test)]
-mod read_config {
-  use super::*;
-  use tempfile::NamedTempFile;
-
-  #[test]
-  fn returns_default_config_if_path_does_not_exist() {
-    assert_eq!(
-      read_config("/this_is_a_non_existent_file").unwrap(),
-      serde_yaml::from_slice(DEFAULT_CONFIG).unwrap()
-    );
-  }
-
-  #[test]
-  fn returns_error_if_given_empty_config() {
-    assert_eq!(
-      read_config("/dev/null").unwrap_err().to_string(),
-      "EOF while parsing a value"
-    );
-  }
-
-  #[test]
-  fn returns_error_if_given_invalid_config() -> Result<(), std::io::Error> {
-    let mut tmp_file = NamedTempFile::new()?;
-    tmp_file.write_all(b"g")?;
-    assert_eq!(
-      read_config(tmp_file.path().to_str().unwrap())
-        .unwrap_err()
-        .to_string(),
-      r#"invalid type: string "g", expected struct Config at line 1 column 1"#
-    );
-    Ok(())
-  }
-
-  #[test]
-  fn returns_error_if_config_missing_field() -> Result<(), std::io::Error> {
-    let mut tmp_file = NamedTempFile::new()?;
-    tmp_file.write_all(
-      br#"
-      bind_address: "localhost"
-      public_address: "localhost"
-      "#,
-    )?;
-    assert_eq!(
-      read_config(tmp_file.path().to_str().unwrap())
-        .unwrap_err()
-        .to_string(),
-      "missing field `groups` at line 2 column 19"
-    );
-    Ok(())
-  }
-
-  #[test]
-  fn returns_ok_if_valid_config() -> Result<(), std::io::Error> {
-    let mut tmp_file = NamedTempFile::new()?;
-    tmp_file.write_all(
-      br#"
-      bind_address: "a"
-      public_address: "b"
-      groups: []"#,
-    )?;
-    assert_eq!(
-      read_config(tmp_file.path().to_str().unwrap()).unwrap(),
-      Config {
-        bind_address: String::from("a"),
-        public_address: String::from("b"),
-        groups: vec![],
-        default_route: None,
-      }
-    );
-    Ok(())
   }
 }

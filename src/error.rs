@@ -9,6 +9,7 @@ pub enum BunBunError {
   WatchError(hotwatch::Error),
   LoggerInitError(log::SetLoggerError),
   CustomProgramError(String),
+  NoValidConfigPath
 }
 
 impl Error for BunBunError {}
@@ -21,6 +22,7 @@ impl fmt::Display for BunBunError {
       Self::WatchError(e) => e.fmt(f),
       Self::LoggerInitError(e) => e.fmt(f),
       Self::CustomProgramError(msg) => write!(f, "{}", msg),
+      Self::NoValidConfigPath => write!(f, "No valid config path was found!"),
     }
   }
 }

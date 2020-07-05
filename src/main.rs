@@ -1,6 +1,9 @@
 #![forbid(unsafe_code)]
 
-use crate::config::{read_config, Route, RouteGroup};
+use crate::config::{
+  get_config_data, load_custom_path_config, read_config, ConfigData, Route,
+  RouteGroup,
+};
 use actix_web::{middleware::Logger, App, HttpServer};
 use clap::{crate_authors, crate_version, load_yaml, App as ClapApp};
 use error::BunBunError;
@@ -41,8 +44,12 @@ async fn main() -> Result<(), BunBunError> {
   )?;
 
   // config has default location provided, unwrapping is fine.
-  let conf_file_location = String::from(matches.value_of("config").unwrap());
-  let conf = read_config(&conf_file_location)?;
+  let conf_data = match matches.value_of("config") {
+    Some(file_name) => load_custom_path_config(file_name),
+    None => get_config_data(),
+  }?;
+
+  let conf = read_config(conf_data.file.try_clone()?)?;
   let state = Arc::from(RwLock::new(State {
     public_address: conf.public_address,
     default_route: conf.default_route,
@@ -50,7 +57,7 @@ async fn main() -> Result<(), BunBunError> {
     groups: conf.groups,
   }));
 
-  let _watch = start_watch(state.clone(), conf_file_location)?;
+  let _watch = start_watch(state.clone(), conf_data)?;
 
   HttpServer::new(move || {
     App::new()
@@ -104,7 +111,7 @@ fn cache_routes(groups: &[RouteGroup]) -> HashMap<String, Route> {
       match mapping.insert(kw.clone(), dest.clone()) {
         None => trace!("Inserting {} into mapping.", kw),
         Some(old_value) => {
-          debug!("Overriding {} route from {} to {}.", kw, old_value, dest)
+          trace!("Overriding {} route from {} to {}.", kw, old_value, dest)
         }
       }
     }
@@ -153,18 +160,25 @@ fn compile_templates() -> Handlebars {
 /// watches.
 fn start_watch(
   state: Arc<RwLock<State>>,
-  config_file_path: String,
+  config_data: ConfigData,
 ) -> Result<Hotwatch, BunBunError> {
   let mut watch = Hotwatch::new_with_custom_delay(Duration::from_millis(500))?;
-  // TODO: keep retry watching in separate thread
+
   // Closures need their own copy of variables for proper life cycle management
-  let config_file_path_clone = config_file_path.clone();
-  let watch_result = watch.watch(&config_file_path, move |e: Event| {
+  let config_data = Arc::new(config_data);
+  let config_data_ref = Arc::clone(&config_data);
+
+  let watch_result = watch.watch(&config_data.path, move |e: Event| {
     if let Event::Write(_) = e {
       trace!("Grabbing writer lock on state...");
-      let mut state = state.write().unwrap();
+      let mut state = state.write().expect("Failed to get write lock on state");
       trace!("Obtained writer lock on state!");
-      match read_config(&config_file_path_clone) {
+      match read_config(
+        config_data_ref
+          .file
+          .try_clone()
+          .expect("Failed to clone file handle"),
+      ) {
         Ok(conf) => {
           state.public_address = conf.public_address;
           state.default_route = conf.default_route;
@@ -180,10 +194,10 @@ fn start_watch(
   });
 
   match watch_result {
-    Ok(_) => info!("Watcher is now watching {}", &config_file_path),
+    Ok(_) => info!("Watcher is now watching {:?}", &config_data.path),
     Err(e) => warn!(
-      "Couldn't watch {}: {}. Changes to this file won't be seen!",
-      &config_file_path, e
+      "Couldn't watch {:?}: {}. Changes to this file won't be seen!",
+      &config_data.path, e
     ),
   }
 

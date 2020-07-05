@@ -12,6 +12,7 @@ exclude = ["/aux/"]
 [dependencies]
 actix-web = "2.0"
 actix-rt = "1.0"
+dirs = "3.0"
 serde = "1.0"
 serde_yaml = "0.8"
 handlebars = "2.0"
