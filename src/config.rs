@@ -38,6 +38,8 @@ pub struct Route {
   pub path: String,
   pub hidden: bool,
   pub description: Option<String>,
+  pub min_args: Option<usize>,
+  pub max_args: Option<usize>,
 }
 
 impl FromStr for Route {
@@ -48,6 +50,8 @@ impl FromStr for Route {
       path: s.to_string(),
       hidden: false,
       description: None,
+      min_args: None,
+      max_args: None,
     })
   }
 }
@@ -68,6 +72,8 @@ impl<'de> Deserialize<'de> for Route {
       Path,
       Hidden,
       Description,
+      MinArgs,
+      MaxArgs,
     }
 
     struct RouteVisitor;
@@ -83,7 +89,7 @@ impl<'de> Deserialize<'de> for Route {
       where
         E: serde::de::Error,
       {
-        // This is infalliable
+        // This is infallable
         Ok(Self::Value::from_str(path).unwrap())
       }
 
@@ -94,6 +100,8 @@ impl<'de> Deserialize<'de> for Route {
         let mut path = None;
         let mut hidden = None;
         let mut description = None;
+        let mut min_args = None;
+        let mut max_args = None;
 
         while let Some(key) = map.next_key()? {
           match key {
@@ -115,6 +123,18 @@ impl<'de> Deserialize<'de> for Route {
               }
               description = Some(map.next_value()?);
             }
+            Field::MinArgs => {
+              if min_args.is_some() {
+                return Err(de::Error::duplicate_field("min_args"));
+              }
+              min_args = Some(map.next_value()?);
+            }
+            Field::MaxArgs => {
+              if max_args.is_some() {
+                return Err(de::Error::duplicate_field("max_args"));
+              }
+              max_args = Some(map.next_value()?);
+            }
           }
         }
 
@@ -124,6 +144,8 @@ impl<'de> Deserialize<'de> for Route {
           path,
           hidden: hidden.unwrap_or_default(),
           description,
+          min_args,
+          max_args,
         })
       }
     }
@@ -337,7 +359,7 @@ mod route {
   fn serialize() {
     assert_eq!(
       &to_string(&Route::from_str("hello world").unwrap()).unwrap(),
-      "---\nroute_type: External\npath: hello world\nhidden: false\ndescription: ~"
+      "---\nroute_type: External\npath: hello world\nhidden: false\ndescription: ~\nmin_args: ~\nmax_args: ~"
     );
   }
 }

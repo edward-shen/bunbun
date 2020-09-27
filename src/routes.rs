@@ -90,7 +90,7 @@ pub async fn hop(
   let data = data.read().unwrap();
 
   match resolve_hop(&query.to, &data.routes, &data.default_route) {
-    (Some(path), args) => {
+    RouteResolution::Resolved { route: path, args } => {
       let resolved_template = match path {
         ConfigRoute {
           route_type: RouteType::Internal,
@@ -126,8 +126,14 @@ pub async fn hop(
         }
       }
     }
-    (None, _) => HttpResponse::NotFound().body("not found"),
+    RouteResolution::Unresolved => HttpResponse::NotFound().body("not found"),
   }
+}
+
+#[derive(Debug, PartialEq)]
+enum RouteResolution<'a> {
+  Resolved { route: &'a Route, args: String },
+  Unresolved,
 }
 
 /// Attempts to resolve the provided string into its route and its arguments.
@@ -140,21 +146,20 @@ fn resolve_hop<'a>(
   query: &str,
   routes: &'a HashMap<String, Route>,
   default_route: &Option<String>,
-) -> (Option<&'a Route>, String) {
+) -> RouteResolution<'a> {
   let mut split_args = query.split_ascii_whitespace().peekable();
   let command = match split_args.peek() {
     Some(command) => command,
     None => {
       debug!("Found empty query, returning no route.");
-      return (None, String::new());
+      return RouteResolution::Unresolved;
     }
   };
 
   match (routes.get(*command), default_route) {
     // Found a route
-    (Some(resolved), _) => (
-      Some(resolved),
-      match split_args.next() {
+    (Some(resolved), _) => {
+      let args = match split_args.next() {
         // Discard the first result, we found the route using the first arg
         Some(_) => {
           let args = split_args.collect::<Vec<&str>>().join(" ");
@@ -165,21 +170,26 @@ fn resolve_hop<'a>(
           debug!("Resolved {} with no args", resolved);
           String::new()
         }
-      },
-    ),
+      };
+
+      RouteResolution::Resolved {
+        route: resolved,
+        args,
+      }
+    }
     // Unable to find route, but had a default route
     (None, Some(route)) => {
       let args = split_args.collect::<Vec<&str>>().join(" ");
       debug!("Using default route {} with args {}", route, args);
       match routes.get(route) {
-        Some(v) => (Some(v), args),
-        None => (None, String::new()),
+        Some(route) => RouteResolution::Resolved { route, args },
+        None => RouteResolution::Unresolved,
       }
     }
     // No default route and no match
     (None, None) => {
       debug!("Failed to resolve route!");
-      (None, String::new())
+      RouteResolution::Unresolved
     }
   }
 }
@@ -211,15 +221,18 @@ mod resolve_hop {
   fn generate_route_result<'a>(
     keyword: &'a Route,
     args: &str,
-  ) -> (Option<&'a Route>, String) {
-    (Some(keyword), String::from(args))
+  ) -> RouteResolution<'a> {
+    RouteResolution::Resolved {
+      route: keyword,
+      args: String::from(args),
+    }
   }
 
   #[test]
   fn empty_routes_no_default_yields_failed_hop() {
     assert_eq!(
       resolve_hop("hello world", &HashMap::new(), &None),
-      (None, String::new())
+      RouteResolution::Unresolved
     );
   }
 
@@ -231,7 +244,7 @@ mod resolve_hop {
         &HashMap::new(),
         &Some(String::from("google"))
       ),
-      (None, String::new())
+      RouteResolution::Unresolved
     );
   }
 
