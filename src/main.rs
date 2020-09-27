@@ -15,6 +15,7 @@ use error::BunBunError;
 use handlebars::{Handlebars, TemplateError};
 use hotwatch::{Event, Hotwatch};
 use log::{debug, error, info, trace, warn};
+use simple_logger::SimpleLogger;
 use std::cmp::min;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
@@ -100,16 +101,16 @@ fn init_logger(
   let log_level =
     match min(num_verbose_flags, 3) as i8 - min(num_quiet_flags, 2) as i8 {
       -2 => None,
-      -1 => Some(log::Level::Error),
-      0 => Some(log::Level::Warn),
-      1 => Some(log::Level::Info),
-      2 => Some(log::Level::Debug),
-      3 => Some(log::Level::Trace),
+      -1 => Some(log::LevelFilter::Error),
+      0 => Some(log::LevelFilter::Warn),
+      1 => Some(log::LevelFilter::Info),
+      2 => Some(log::LevelFilter::Debug),
+      3 => Some(log::LevelFilter::Trace),
       _ => unreachable!(), // values are clamped to [0, 3] - [0, 2]
     };
 
   if let Some(level) = log_level {
-    simple_logger::init_with_level(level)?;
+    SimpleLogger::new().with_level(level).init()?;
   }
 
   Ok(())
@@ -136,7 +137,7 @@ fn cache_routes(groups: &[RouteGroup]) -> HashMap<String, Route> {
 /// Returns an instance with all pre-generated templates included into the
 /// binary. This allows for users to have a portable binary without needed the
 /// templates at runtime.
-fn compile_templates() -> Result<Handlebars, TemplateError> {
+fn compile_templates() -> Result<Handlebars<'static>, TemplateError> {
   let mut handlebars = Handlebars::new();
   handlebars.set_strict_mode(true);
   handlebars.register_partial("bunbun_version", env!("CARGO_PKG_VERSION"))?;
