@@ -148,50 +148,37 @@ fn resolve_hop<'a>(
   default_route: &Option<String>,
 ) -> RouteResolution<'a> {
   let mut split_args = query.split_ascii_whitespace().peekable();
-  let command = match split_args.peek() {
-    Some(command) => command,
-    None => {
-      debug!("Found empty query, returning no route.");
-      return RouteResolution::Unresolved;
+  let maybe_route = {
+    match split_args.peek() {
+      Some(command) => routes.get(*command),
+      None => {
+        debug!("Found empty query, returning no route.");
+        return RouteResolution::Unresolved;
+      }
     }
   };
 
-  match (routes.get(*command), default_route) {
-    // Found a route
-    (Some(resolved), _) => {
-      let args = match split_args.next() {
-        // Discard the first result, we found the route using the first arg
-        Some(_) => {
-          let args = split_args.collect::<Vec<&str>>().join(" ");
-          debug!("Resolved {} with args {}", resolved, args);
-          args
-        }
-        None => {
-          debug!("Resolved {} with no args", resolved);
-          String::new()
-        }
-      };
+  if maybe_route.is_some() {
+    split_args.next();
+  }
 
-      RouteResolution::Resolved {
-        route: resolved,
-        args,
-      }
-    }
-    // Unable to find route, but had a default route
-    (None, Some(route)) => {
-      let args = split_args.collect::<Vec<&str>>().join(" ");
+  let args = split_args.collect::<Vec<_>>().join(" ");
+
+  // Try resolving with a matched command
+  if let Some(route) = maybe_route {
+    debug!("Resolved {} with args {}", route, args);
+    return RouteResolution::Resolved { route, args };
+  }
+
+  // Try resolving with the default route, if it exists
+  if let Some(route) = default_route {
+    if let Some(route) = routes.get(route) {
       debug!("Using default route {} with args {}", route, args);
-      match routes.get(route) {
-        Some(route) => RouteResolution::Resolved { route, args },
-        None => RouteResolution::Unresolved,
-      }
-    }
-    // No default route and no match
-    (None, None) => {
-      debug!("Failed to resolve route!");
-      RouteResolution::Unresolved
+      return RouteResolution::Resolved { route, args };
     }
   }
+
+  RouteResolution::Unresolved
 }
 
 /// Runs the executable with the user's input as a single argument. Returns Ok
