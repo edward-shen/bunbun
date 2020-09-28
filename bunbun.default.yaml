@@ -17,11 +17,15 @@ default_route: "g"
 # defined route is used.
 #
 # You may provide an (absolute, recommended) path to an executable file to out-
-# source route resolution to a program. The program will receive one argument
-# only, which is the entire string provided from the user after matching the
-# route. It is up to the out-sourced program to parse the arguments and to
-# interpret those arguments. These programs should print one line to standard
-# out, which should be a fully resolved URL to lead the user to.
+# source route resolution to a program. The program will receive the arguments
+# as space-separated words, without any shell parsing.
+#
+# These programs must return a JSON object with either one of the following
+# key-value pairs:
+#  - "redirect": "some-path-to-redirect-to.com"
+#  - "body": The actual body to return.
+# For example, to return a page that only prints out `3`, the function should
+# return `{"redirect": "3"}`.
 #
 # These programs must be developed defensively, as they accept arbitrary user
 # input. Improper handling of user input can easily lead to anywhere from simple

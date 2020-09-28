@@ -12,6 +12,7 @@ pub enum BunBunError {
   InvalidConfigPath(std::path::PathBuf, std::io::Error),
   ConfigTooLarge(u64),
   ZeroByteConfig,
+  JsonParse(serde_json::Error),
 }
 
 impl Error for BunBunError {}
@@ -29,7 +30,8 @@ impl fmt::Display for BunBunError {
         write!(f, "Failed to access {:?}: {}", path, reason)
       }
       Self::ConfigTooLarge(size) => write!(f, "The config file was too large ({} bytes)! Pass in --large-config to bypass this check.", size),
-      Self::ZeroByteConfig => write!(f, "The config provided reported a size of 0 bytes. Please check your config path!")
+      Self::ZeroByteConfig => write!(f, "The config provided reported a size of 0 bytes. Please check your config path!"),
+      Self::JsonParse(e) => e.fmt(f),
     }
   }
 }
@@ -50,3 +52,4 @@ from_error!(std::io::Error, Io);
 from_error!(serde_yaml::Error, Parse);
 from_error!(hotwatch::Error, Watch);
 from_error!(log::SetLoggerError, LoggerInit);
+from_error!(serde_json::Error, JsonParse);

@@ -101,18 +101,18 @@ pub async fn hop(
           route_type: RouteType::External,
           path,
           ..
-        } => Ok(path.to_owned().into_bytes()),
+        } => Ok(HopAction::Redirect(path.clone())),
       };
 
       match resolved_template {
-        Ok(path) => HttpResponse::Found()
+        Ok(HopAction::Redirect(path)) => HttpResponse::Found()
           .header(
             header::LOCATION,
             req
               .app_data::<Handlebars>()
               .unwrap()
               .render_template(
-                std::str::from_utf8(&path).unwrap(),
+                std::str::from_utf8(path.as_bytes()).unwrap(),
                 &template_args::query(
                   utf8_percent_encode(&args, FRAGMENT_ENCODE_SET).to_string(),
                 ),
@@ -120,6 +120,7 @@ pub async fn hop(
               .unwrap(),
           )
           .finish(),
+        Ok(HopAction::Body(body)) => HttpResponse::Ok().body(body),
         Err(e) => {
           error!("Failed to redirect user for {}: {}", path, e);
           HttpResponse::InternalServerError().body("Something went wrong :(\n")
@@ -203,15 +204,24 @@ fn check_route(route: &Route, arg_count: usize) -> bool {
   true
 }
 
+#[derive(Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+enum HopAction {
+  Redirect(String),
+  Body(String),
+}
+
 /// Runs the executable with the user's input as a single argument. Returns Ok
 /// so long as the executable was successfully executed. Returns an Error if the
 /// file doesn't exist or bunbun did not have permission to read and execute the
 /// file.
-fn resolve_path(path: PathBuf, args: &str) -> Result<Vec<u8>, BunBunError> {
-  let output = Command::new(path.canonicalize()?).arg(args).output()?;
+fn resolve_path(path: PathBuf, args: &str) -> Result<HopAction, BunBunError> {
+  let output = Command::new(path.canonicalize()?)
+    .args(args.split(" "))
+    .output()?;
 
   if output.status.success() {
-    Ok(output.stdout)
+    Ok(serde_json::from_slice(&output.stdout[..])?)
   } else {
     error!(
       "Program exit code for {} was not 0! Dumping standard error!",
@@ -359,7 +369,7 @@ mod check_route {
 
 #[cfg(test)]
 mod resolve_path {
-  use super::resolve_path;
+  use super::{resolve_path, HopAction};
   use std::env::current_dir;
   use std::path::PathBuf;
 
@@ -370,7 +380,9 @@ mod resolve_path {
 
   #[test]
   fn valid_path_returns_ok() {
-    assert!(resolve_path(PathBuf::from("/bin/echo"), "hello").is_ok());
+    assert!(
+      resolve_path(PathBuf::from("/bin/echo"), r#"{"body": "a"}"#).is_ok()
+    );
   }
 
   #[test]
@@ -379,7 +391,7 @@ mod resolve_path {
     let nest_level = current_dir().unwrap().ancestors().count() - 1;
     let mut rel_path = PathBuf::from("../".repeat(nest_level));
     rel_path.push("./bin/echo");
-    assert!(resolve_path(rel_path, "hello").is_ok());
+    assert!(resolve_path(rel_path, r#"{"body": "a"}"#).is_ok());
   }
 
   #[test]
@@ -398,5 +410,21 @@ mod resolve_path {
   fn non_success_exit_code_yields_err() {
     // cat-ing a folder always returns exit code 1
     assert!(resolve_path(PathBuf::from("/bin/cat"), "/").is_err());
+  }
+
+  #[test]
+  fn return_body() {
+    assert_eq!(
+      resolve_path(PathBuf::from("/bin/echo"), r#"{"body": "a"}"#).unwrap(),
+      HopAction::Body("a".to_string())
+    );
+  }
+
+  #[test]
+  fn return_redirect() {
+    assert_eq!(
+      resolve_path(PathBuf::from("/bin/echo"), r#"{"redirect": "a"}"#).unwrap(),
+      HopAction::Redirect("a".to_string())
+    );
   }
 }
