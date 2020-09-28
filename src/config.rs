@@ -67,7 +67,7 @@ impl<'de> Deserialize<'de> for Route {
     D: Deserializer<'de>,
   {
     #[derive(Deserialize)]
-    #[serde(field_identifier, rename_all = "lowercase")]
+    #[serde(field_identifier, rename_all = "snake_case")]
     enum Field {
       Path,
       Hidden,

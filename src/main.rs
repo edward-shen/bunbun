@@ -66,6 +66,7 @@ async fn run() -> Result<(), BunBunError> {
     groups: conf.groups,
   }));
 
+  // Cannot be named _ or Rust will immediately drop it.
   let _watch = start_watch(Arc::clone(&state), conf_data, opts.large_config)?;
 
   HttpServer::new(move || {

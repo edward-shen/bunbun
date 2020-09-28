@@ -158,27 +158,49 @@ fn resolve_hop<'a>(
     }
   };
 
-  if maybe_route.is_some() {
-    split_args.next();
-  }
-
-  let args = split_args.collect::<Vec<_>>().join(" ");
+  let args = split_args.collect::<Vec<_>>();
+  let arg_count = args.len();
 
   // Try resolving with a matched command
   if let Some(route) = maybe_route {
-    debug!("Resolved {} with args {}", route, args);
-    return RouteResolution::Resolved { route, args };
+    let args = if args.is_empty() { &[] } else { &args[1..] }.join(" ");
+    let arg_count = arg_count - 1;
+    if check_route(route, arg_count) {
+      debug!("Resolved {} with args {}", route, args);
+      return RouteResolution::Resolved { route, args };
+    }
   }
 
   // Try resolving with the default route, if it exists
   if let Some(route) = default_route {
     if let Some(route) = routes.get(route) {
-      debug!("Using default route {} with args {}", route, args);
-      return RouteResolution::Resolved { route, args };
+      if check_route(route, arg_count) {
+        let args = args.join(" ");
+        debug!("Using default route {} with args {}", route, args);
+        return RouteResolution::Resolved { route, args };
+      }
     }
   }
 
   RouteResolution::Unresolved
+}
+
+/// Checks if the user provided string has the correct properties required by
+/// the route to be successfully matched.
+fn check_route(route: &Route, arg_count: usize) -> bool {
+  if let Some(min_args) = route.min_args {
+    if arg_count < min_args {
+      return false;
+    }
+  }
+
+  if let Some(max_args) = route.max_args {
+    if arg_count > max_args {
+      return false;
+    }
+  }
+
+  true
 }
 
 /// Runs the executable with the user's input as a single argument. Returns Ok
@@ -281,6 +303,57 @@ mod resolve_hop {
         "hello world"
       ),
     );
+  }
+}
+
+#[cfg(test)]
+mod check_route {
+  use super::*;
+
+  fn create_route(
+    min_args: impl Into<Option<usize>>,
+    max_args: impl Into<Option<usize>>,
+  ) -> Route {
+    Route {
+      description: None,
+      hidden: false,
+      max_args: max_args.into(),
+      min_args: min_args.into(),
+      path: String::new(),
+      route_type: RouteType::External,
+    }
+  }
+
+  #[test]
+  fn no_min_arg_no_max_arg_counts() {
+    assert!(check_route(&create_route(None, None), 0));
+    assert!(check_route(&create_route(None, None), usize::MAX));
+  }
+
+  #[test]
+  fn min_arg_no_max_arg_counts() {
+    assert!(!check_route(&create_route(3, None), 0));
+    assert!(!check_route(&create_route(3, None), 2));
+    assert!(check_route(&create_route(3, None), 3));
+    assert!(check_route(&create_route(3, None), 4));
+    assert!(check_route(&create_route(3, None), usize::MAX));
+  }
+
+  #[test]
+  fn no_min_arg_max_arg_counts() {
+    assert!(check_route(&create_route(None, 3), 0));
+    assert!(check_route(&create_route(None, 3), 2));
+    assert!(check_route(&create_route(None, 3), 3));
+    assert!(!check_route(&create_route(None, 3), 4));
+    assert!(!check_route(&create_route(None, 3), usize::MAX));
+  }
+
+  #[test]
+  fn min_arg_max_arg_counts() {
+    assert!(!check_route(&create_route(2, 3), 1));
+    assert!(check_route(&create_route(2, 3), 2));
+    assert!(check_route(&create_route(2, 3), 3));
+    assert!(!check_route(&create_route(2, 3), 4));
   }
 }
 
