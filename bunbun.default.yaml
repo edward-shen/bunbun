@@ -34,13 +34,20 @@ groups:
     routes:
       # /ls is the only page that comes with bunbun besides the homepage. This
       # page provides a full list of routes and their groups they're in.
-      ls: &ls "/ls"
+      ls: &ls
+        path: "/ls"
+        # You can specify a maximum number of arguments, which are string
+        # delimited strings.
+        max_args: 0
+        # You can also specify a minimum amount of arguments.
+        # min_args: 1
       help:
-        # Bunbun supports all standard YAML features, so things like YAML pointers
-        # and references are supported.
-        path: *ls
+        path: &ls "/ls"
+        max_args: 0
         # Paths can be hidden from the listings page if desired.
         hidden: true
+      # Bunbun supports all standard YAML features, so things like YAML pointers
+      # and references are supported.
       list: *ls
   -
     # This is another group without a description
