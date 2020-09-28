@@ -2,7 +2,7 @@ use crate::BunBunError;
 use dirs::{config_dir, home_dir};
 use log::{debug, info, trace};
 use serde::{
-  de::{self, Deserializer, MapAccess, Visitor},
+  de::{self, Deserializer, MapAccess, Unexpected, Visitor},
   Deserialize, Serialize,
 };
 use std::collections::HashMap;
@@ -134,6 +134,20 @@ impl<'de> Deserialize<'de> for Route {
                 return Err(de::Error::duplicate_field("max_args"));
               }
               max_args = Some(map.next_value()?);
+            }
+          }
+        }
+
+        if let (Some(min_args), Some(max_args)) = (min_args, max_args) {
+          if min_args > max_args {
+            {
+              return Err(de::Error::invalid_value(
+                Unexpected::Other(&format!(
+                  "argument count range {} to {}",
+                  min_args, max_args
+                )),
+                &"a valid argument count range",
+              ));
             }
           }
         }
