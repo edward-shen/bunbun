@@ -420,7 +420,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "bunbun"
-version = "0.7.0"
+version = "0.8.0"
 dependencies = [
  "actix-rt 1.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "actix-web 3.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
