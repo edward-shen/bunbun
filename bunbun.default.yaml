@@ -42,7 +42,7 @@ groups:
         # You can also specify a minimum amount of arguments.
         # min_args: 1
       help:
-        path: &ls "/ls"
+        path: "/ls"
         max_args: 0
         # Paths can be hidden from the listings page if desired.
         hidden: true
