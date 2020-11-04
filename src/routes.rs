@@ -217,7 +217,7 @@ enum HopAction {
 /// file.
 fn resolve_path(path: PathBuf, args: &str) -> Result<HopAction, BunBunError> {
   let output = Command::new(path.canonicalize()?)
-    .args(args.split(" "))
+    .args(args.split(' '))
     .output()?;
 
   if output.status.success() {
