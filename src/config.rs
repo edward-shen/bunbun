@@ -89,7 +89,7 @@ impl<'de> Deserialize<'de> for Route {
       where
         E: serde::de::Error,
       {
-        // This is infallable
+        // This is infallible
         Ok(Self::Value::from_str(path).unwrap())
       }
 

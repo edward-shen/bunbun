@@ -175,27 +175,36 @@ fn start_watch(
   large_config: bool,
 ) -> Result<Hotwatch, BunBunError> {
   let mut watch = Hotwatch::new_with_custom_delay(Duration::from_millis(500))?;
-  let ConfigData { path, file } = config_data;
+  let ConfigData { path, mut file } = config_data;
   let watch_result = watch.watch(&path, move |e: Event| {
-    if let Event::Write(_) = e {
-      trace!("Grabbing writer lock on state...");
-      let mut state = state.write().expect("Failed to get write lock on state");
-      trace!("Obtained writer lock on state!");
-      match read_config(
-        file.try_clone().expect("Failed to clone file handle"),
-        large_config,
-      ) {
-        Ok(conf) => {
-          state.public_address = conf.public_address;
-          state.default_route = conf.default_route;
-          state.routes = cache_routes(&conf.groups);
-          state.groups = conf.groups;
-          info!("Successfully updated active state");
+    if let Event::Create(ref path) = e {
+      file = load_custom_path_config(path)
+        .expect("file to exist at path")
+        .file;
+      trace!("Getting new file handler as file was recreated.");
+    }
+
+    match e {
+      Event::Write(_) | Event::Create(_) => {
+        trace!("Grabbing writer lock on state...");
+        let mut state =
+          state.write().expect("Failed to get write lock on state");
+        trace!("Obtained writer lock on state!");
+        match read_config(
+          file.try_clone().expect("Failed to clone file handle"),
+          large_config,
+        ) {
+          Ok(conf) => {
+            state.public_address = conf.public_address;
+            state.default_route = conf.default_route;
+            state.routes = cache_routes(&conf.groups);
+            state.groups = conf.groups;
+            info!("Successfully updated active state");
+          }
+          Err(e) => warn!("Failed to update config file: {}", e),
         }
-        Err(e) => warn!("Failed to update config file: {}", e),
       }
-    } else {
-      debug!("Saw event {:#?} but ignored it", e);
+      _ => debug!("Saw event {:#?} but ignored it", e),
     }
   });
 
