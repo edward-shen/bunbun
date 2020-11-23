@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+set -euxo pipefail
+
+if ! cargo tarpaulin -h &> /dev/null; then
+  echo "Tarpaulin not installed, automatically installing in 3 seconds.";
+  sleep 3;
+  cargo install cargo-tarpaulin;
+fi;
+
+cargo tarpaulin -o html && xdg-open "tarpaulin-report.html"

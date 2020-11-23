@@ -2,3 +2,4 @@
 **/*.rs.bk
 bunbun.toml
 out
+tarpaulin-report.html

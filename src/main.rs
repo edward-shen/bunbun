@@ -23,8 +23,10 @@ use std::time::Duration;
 
 mod cli;
 mod config;
+#[cfg(not(tarpaulin_include))]
 mod error;
 mod routes;
+#[cfg(not(tarpaulin_include))]
 mod template_args;
 
 /// Dynamic variables that either need to be present at runtime, or can be
@@ -38,6 +40,7 @@ pub struct State {
 }
 
 #[actix_rt::main]
+#[cfg(not(tarpaulin_include))]
 async fn main() {
   std::process::exit(match run().await {
     Ok(_) => 0,
@@ -48,6 +51,7 @@ async fn main() {
   })
 }
 
+#[cfg(not(tarpaulin_include))]
 async fn run() -> Result<(), BunBunError> {
   let opts = cli::Opts::parse();
 
@@ -95,6 +99,7 @@ async fn run() -> Result<(), BunBunError> {
 /// Initializes the logger based on the number of quiet and verbose flags passed
 /// in. Usually, these values are mutually exclusive, that is, if the number of
 /// verbose flags is non-zero then the quiet flag is zero, and vice versa.
+#[cfg(not(tarpaulin_include))]
 fn init_logger(
   num_verbose_flags: u8,
   num_quiet_flags: u8,
@@ -169,6 +174,7 @@ fn compile_templates() -> Result<Handlebars<'static>, TemplateError> {
 ///
 /// This watch object should be kept in scope as dropping it releases all
 /// watches.
+#[cfg(not(tarpaulin_include))]
 fn start_watch(
   state: Arc<RwLock<State>>,
   config_data: ConfigData,

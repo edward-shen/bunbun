@@ -14,6 +14,10 @@ use std::str::FromStr;
 
 const CONFIG_FILENAME: &str = "bunbun.yaml";
 const DEFAULT_CONFIG: &[u8] = include_bytes!("../bunbun.default.yaml");
+#[cfg(not(test))]
+const LARGE_FILE_SIZE_THRESHOLD: u64 = 100_000_000;
+#[cfg(test)]
+const LARGE_FILE_SIZE_THRESHOLD: u64 = 1_000_000;
 
 #[derive(Deserialize, Debug, PartialEq)]
 pub struct Config {
@@ -307,7 +311,7 @@ pub fn read_config(
   let file_size = config_file.metadata()?.len();
 
   // 100 MB
-  if file_size > 100_000_000 && !large_config {
+  if file_size > LARGE_FILE_SIZE_THRESHOLD && !large_config {
     return Err(BunBunError::ConfigTooLarge(file_size));
   }
 
@@ -375,5 +379,40 @@ mod route {
       &to_string(&Route::from_str("hello world").unwrap()).unwrap(),
       "---\nroute_type: External\npath: hello world\nhidden: false\ndescription: ~\nmin_args: ~\nmax_args: ~"
     );
+  }
+}
+
+#[cfg(test)]
+mod read_config {
+  use super::*;
+
+  #[test]
+  fn empty_file() {
+    let config_file = tempfile::tempfile().unwrap();
+    assert!(matches!(
+      read_config(config_file, false),
+      Err(BunBunError::ZeroByteConfig)
+    ));
+  }
+
+  #[test]
+  fn config_too_large() {
+    let mut config_file = tempfile::tempfile().unwrap();
+    let size_to_write = (LARGE_FILE_SIZE_THRESHOLD + 1) as usize;
+    config_file.write(&[0].repeat(size_to_write)).unwrap();
+    match read_config(config_file, false) {
+      Err(BunBunError::ConfigTooLarge(size))
+        if size as usize == size_to_write => {}
+      Err(BunBunError::ConfigTooLarge(size)) => {
+        panic!("Mismatched size: {} != {}", size, size_to_write)
+      }
+      res => panic!("Wrong result, got {:#?}", res),
+    }
+  }
+
+  #[test]
+  fn valid_config() {
+    let config_file = File::open("bunbun.default.yaml").unwrap();
+    assert!(read_config(config_file, false).is_ok());
   }
 }
