@@ -377,7 +377,7 @@ mod route {
   fn serialize() {
     assert_eq!(
       &to_string(&Route::from_str("hello world").unwrap()).unwrap(),
-      "---\nroute_type: External\npath: hello world\nhidden: false\ndescription: ~\nmin_args: ~\nmax_args: ~"
+      "---\nroute_type: External\npath: hello world\nhidden: false\ndescription: ~\nmin_args: ~\nmax_args: ~\n"
     );
   }
 }

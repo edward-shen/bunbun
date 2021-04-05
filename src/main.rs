@@ -39,7 +39,7 @@ pub struct State {
   routes: HashMap<String, Route>,
 }
 
-#[actix_rt::main]
+#[actix_web::main]
 #[cfg(not(tarpaulin_include))]
 async fn main() {
   std::process::exit(match run().await {
