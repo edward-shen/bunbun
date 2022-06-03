@@ -123,7 +123,7 @@ pub async fn hop(
           .status(StatusCode::OK)
           .body(boxed(Full::new(Bytes::from(body)))),
         Err(e) => {
-          error!("Failed to redirect user for {}: {}", path, e);
+          error!("Failed to redirect user for {path}: {e}");
           Response::builder()
             .status(StatusCode::INTERNAL_SERVER_ERROR)
             .body(boxed(Full::from("Something went wrong :(\n")))
@@ -173,7 +173,7 @@ fn resolve_hop<'a>(
     let args = if args.is_empty() { &[] } else { &args[1..] }.join(" ");
     let arg_count = arg_count - 1;
     if check_route(route, arg_count) {
-      debug!("Resolved {} with args {}", route, args);
+      debug!("Resolved {route} with args {args}");
       return RouteResolution::Resolved { route, args };
     }
   }
@@ -183,7 +183,7 @@ fn resolve_hop<'a>(
     if let Some(route) = routes.get(route) {
       if check_route(route, arg_count) {
         let args = args.join(" ");
-        debug!("Using default route {} with args {}", route, args);
+        debug!("Using default route {route} with args {args}");
         return RouteResolution::Resolved { route, args };
       }
     }

@@ -417,7 +417,7 @@ mod read_config {
       Err(BunBunError::ConfigTooLarge(size))
         if size as usize == size_to_write => {}
       Err(BunBunError::ConfigTooLarge(size)) => {
-        panic!("Mismatched size: {} != {}", size, size_to_write)
+        panic!("Mismatched size: {size} != {size_to_write}")
       }
       res => panic!("Wrong result, got {res:#?}"),
     }

@@ -25,7 +25,7 @@ impl fmt::Display for BunBunError {
       Self::Parse(e) => e.fmt(f),
       Self::Watch(e) => e.fmt(f),
       Self::LoggerInit(e) => e.fmt(f),
-      Self::CustomProgram(msg) => write!(f, "{}", msg),
+      Self::CustomProgram(msg) => msg.fmt(f),
       Self::NoValidConfigPath => write!(f, "No valid config path was found!"),
       Self::InvalidConfigPath(path, reason) => {
         write!(f, "Failed to access {path:?}: {reason}")
