@@ -12,7 +12,7 @@ exclude = ["/aux/"]
 [dependencies]
 anyhow = "1"
 arc-swap = "1"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 axum = "0.5"
 clap = { version = "3", features = ["wrap_help", "derive", "cargo"] }
 dirs = "4"
