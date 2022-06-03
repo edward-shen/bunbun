@@ -242,7 +242,6 @@ fn resolve_path(path: &Path, args: &str) -> Result<HopAction, BunBunError> {
 mod resolve_hop {
   use super::*;
   use anyhow::Result;
-  use std::str::FromStr;
 
   fn generate_route_result<'a>(
     keyword: &'a Route,
@@ -277,13 +276,10 @@ mod resolve_hop {
   #[test]
   fn only_default_routes_some_default_yields_default_hop() -> Result<()> {
     let mut map: HashMap<String, Route> = HashMap::new();
-    map.insert("google".into(), Route::from_str("https://example.com")?);
+    map.insert("google".into(), Route::from("https://example.com"));
     assert_eq!(
       resolve_hop("hello world", &map, &Some(String::from("google"))),
-      generate_route_result(
-        &Route::from_str("https://example.com")?,
-        "hello world"
-      ),
+      generate_route_result(&Route::from("https://example.com"), "hello world"),
     );
     Ok(())
   }
@@ -291,13 +287,10 @@ mod resolve_hop {
   #[test]
   fn non_default_routes_some_default_yields_non_default_hop() -> Result<()> {
     let mut map: HashMap<String, Route> = HashMap::new();
-    map.insert("google".into(), Route::from_str("https://example.com")?);
+    map.insert("google".into(), Route::from("https://example.com"));
     assert_eq!(
       resolve_hop("google hello world", &map, &Some(String::from("a"))),
-      generate_route_result(
-        &Route::from_str("https://example.com")?,
-        "hello world"
-      ),
+      generate_route_result(&Route::from("https://example.com"), "hello world"),
     );
     Ok(())
   }
@@ -305,13 +298,10 @@ mod resolve_hop {
   #[test]
   fn non_default_routes_no_default_yields_non_default_hop() -> Result<()> {
     let mut map: HashMap<String, Route> = HashMap::new();
-    map.insert("google".into(), Route::from_str("https://example.com")?);
+    map.insert("google".into(), Route::from("https://example.com"));
     assert_eq!(
       resolve_hop("google hello world", &map, &None),
-      generate_route_result(
-        &Route::from_str("https://example.com")?,
-        "hello world"
-      ),
+      generate_route_result(&Route::from("https://example.com"), "hello world"),
     );
     Ok(())
   }
@@ -370,9 +360,12 @@ mod check_route {
 
 #[cfg(test)]
 mod resolve_path {
+  use crate::error::BunBunError;
+
   use super::{resolve_path, HopAction};
   use anyhow::Result;
   use std::env::current_dir;
+  use std::io::ErrorKind;
   use std::path::{Path, PathBuf};
 
   #[test]
@@ -397,14 +390,11 @@ mod resolve_path {
 
   #[test]
   fn no_permissions_returns_err() {
-    assert!(
-      // Trying to run a command without permission
-      format!(
-        "{}",
-        resolve_path(&Path::new("/root/some_exec"), "").unwrap_err()
-      )
-      .contains("Permission denied")
-    );
+    let result = match resolve_path(&Path::new("/root/some_exec"), "") {
+      Err(BunBunError::Io(e)) => e.kind() == ErrorKind::PermissionDenied,
+      _ => false,
+    };
+    assert!(result);
   }
 
   #[test]

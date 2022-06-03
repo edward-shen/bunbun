@@ -10,7 +10,6 @@ use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::PathBuf;
-use std::str::FromStr;
 
 const CONFIG_FILENAME: &str = "bunbun.yaml";
 const DEFAULT_CONFIG: &[u8] = include_bytes!("../bunbun.default.yaml");
@@ -44,20 +43,6 @@ pub struct Route {
   pub description: Option<String>,
   pub min_args: Option<usize>,
   pub max_args: Option<usize>,
-}
-
-impl FromStr for Route {
-  type Err = std::convert::Infallible;
-  fn from_str(s: &str) -> Result<Self, Self::Err> {
-    Ok(Self {
-      route_type: get_route_type(s),
-      path: s.to_string(),
-      hidden: false,
-      description: None,
-      min_args: None,
-      max_args: None,
-    })
-  }
 }
 
 impl From<String> for Route {
@@ -119,8 +104,7 @@ impl<'de> Deserialize<'de> for Route {
       where
         E: serde::de::Error,
       {
-        // This is infallible
-        Ok(Self::Value::from_str(path).unwrap())
+        Ok(Self::Value::from(path.to_owned()))
       }
 
       fn visit_map<M>(self, mut map: M) -> Result<Self::Value, M::Error>
@@ -354,19 +338,20 @@ mod route {
   use super::*;
   use anyhow::{Context, Result};
   use serde_yaml::{from_str, to_string};
+  use std::path::Path;
   use tempfile::NamedTempFile;
 
   #[test]
   fn deserialize_relative_path() -> Result<()> {
     let tmpfile = NamedTempFile::new_in(".")?;
-    let path = format!("{}", tmpfile.path().display());
+    let path = tmpfile.path().display().to_string();
     let path = path
       .get(path.rfind(".").context("While finding .")?..)
       .context("While getting the path")?;
-    let path = std::path::Path::new(path);
+    let path = Path::new(path);
     assert!(path.is_relative());
     let path = path.to_str().context("While stringifying path")?;
-    assert_eq!(from_str::<Route>(path)?, Route::from_str(path)?);
+    assert_eq!(from_str::<Route>(path)?, Route::from(path.to_owned()));
     Ok(())
   }
 
@@ -375,7 +360,7 @@ mod route {
     let tmpfile = NamedTempFile::new()?;
     let path = format!("{}", tmpfile.path().display());
     assert!(tmpfile.path().is_absolute());
-    assert_eq!(from_str::<Route>(&path)?, Route::from_str(&path)?);
+    assert_eq!(from_str::<Route>(&path)?, Route::from(path));
 
     Ok(())
   }
@@ -384,7 +369,7 @@ mod route {
   fn deserialize_http_path() -> Result<()> {
     assert_eq!(
       from_str::<Route>("http://google.com")?,
-      Route::from_str("http://google.com")?
+      Route::from("http://google.com")
     );
     Ok(())
   }
@@ -393,7 +378,7 @@ mod route {
   fn deserialize_https_path() -> Result<()> {
     assert_eq!(
       from_str::<Route>("https://google.com")?,
-      Route::from_str("https://google.com")?
+      Route::from("https://google.com")
     );
     Ok(())
   }
@@ -401,7 +386,7 @@ mod route {
   #[test]
   fn serialize() -> Result<()> {
     assert_eq!(
-      &to_string(&Route::from_str("hello world")?)?,
+      &to_string(&Route::from("hello world"))?,
       "---\nroute_type: External\npath: hello world\nhidden: false\ndescription: ~\nmin_args: ~\nmax_args: ~\n"
     );
     Ok(())
