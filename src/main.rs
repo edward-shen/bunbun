@@ -15,12 +15,12 @@ use clap::Parser;
 use error::BunBunError;
 use handlebars::Handlebars;
 use hotwatch::{Event, Hotwatch};
-use log::{debug, info, trace, warn};
-use simple_logger::SimpleLogger;
-use std::cmp::min;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
+use tracing::{debug, info, trace, warn};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 mod cli;
 mod config;
@@ -43,9 +43,19 @@ pub struct State {
 #[tokio::main]
 #[cfg(not(tarpaulin_include))]
 async fn main() -> Result<()> {
+    use tracing_subscriber::EnvFilter;
+
     let opts = cli::Opts::parse();
 
-    init_logger(opts.verbose, opts.quiet)?;
+    let mut env_filter = EnvFilter::from_default_env();
+    for directive in opts.log {
+        env_filter = env_filter.add_directive(directive);
+    }
+
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer())
+        .with(env_filter)
+        .init();
 
     let conf_data = match opts.config {
         Some(file_name) => load_custom_file(file_name),
@@ -71,31 +81,13 @@ async fn main() -> Result<()> {
         .layer(Extension(compile_templates()?))
         .layer(Extension(state));
 
-    axum::Server::bind(&conf.bind_address.parse()?)
+    let bind_addr = conf.bind_address.parse()?;
+
+    info!("Starting server at {bind_addr}");
+
+    axum::Server::bind(&bind_addr)
         .serve(app.into_make_service())
         .await?;
-
-    Ok(())
-}
-
-/// Initializes the logger based on the number of quiet and verbose flags passed
-/// in. Usually, these values are mutually exclusive, that is, if the number of
-/// verbose flags is non-zero then the quiet flag is zero, and vice versa.
-#[cfg(not(tarpaulin_include))]
-fn init_logger(num_verbose_flags: u8, num_quiet_flags: u8) -> Result<()> {
-    let log_level = match min(num_verbose_flags, 3) as i8 - min(num_quiet_flags, 2) as i8 {
-        -2 => None,
-        -1 => Some(log::LevelFilter::Error),
-        0 => Some(log::LevelFilter::Warn),
-        1 => Some(log::LevelFilter::Info),
-        2 => Some(log::LevelFilter::Debug),
-        3 => Some(log::LevelFilter::Trace),
-        _ => unreachable!(), // values are clamped to [0, 3] - [0, 2]
-    };
-
-    if let Some(level) = log_level {
-        SimpleLogger::new().with_level(level).init()?;
-    }
 
     Ok(())
 }
@@ -199,39 +191,6 @@ fn start_watch(
     }
 
     Ok(watch)
-}
-
-#[cfg(test)]
-mod init_logger {
-    use super::*;
-    use anyhow::Result;
-
-    #[test]
-    fn defaults_to_warn() -> Result<()> {
-        init_logger(0, 0)?;
-        assert_eq!(log::max_level(), log::Level::Warn);
-        Ok(())
-    }
-
-    // The following tests work but because the log crate is global, initializing
-    // the logger more than once (read: testing it more than once) leads to a
-    // panic. These ignored tests must be manually tested.
-
-    #[test]
-    #[ignore]
-    fn caps_to_2_when_log_level_is_lt_2() -> Result<()> {
-        init_logger(0, 3)?;
-        assert_eq!(log::max_level(), log::LevelFilter::Off);
-        Ok(())
-    }
-
-    #[test]
-    #[ignore]
-    fn caps_to_3_when_log_level_is_gt_3() -> Result<()> {
-        init_logger(4, 0)?;
-        assert_eq!(log::max_level(), log::Level::Trace);
-        Ok(())
-    }
 }
 
 #[cfg(test)]

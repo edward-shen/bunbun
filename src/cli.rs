@@ -1,15 +1,13 @@
 use clap::{crate_authors, crate_version, Parser};
 use std::path::PathBuf;
+use tracing_subscriber::filter::Directive;
 
 #[derive(Parser)]
 #[clap(version = crate_version!(), author = crate_authors!())]
 pub struct Opts {
-    /// Increases the log level to info, debug, and trace, respectively.
-    #[clap(short, long, parse(from_occurrences), conflicts_with("quiet"))]
-    pub verbose: u8,
-    /// Decreases the log level to error or no logging at all, respectively.
-    #[clap(short, long, parse(from_occurrences), conflicts_with("verbose"))]
-    pub quiet: u8,
+    /// Set the logging directives
+    #[clap(long, default_value = "info")]
+    pub log: Vec<Directive>,
     /// Specify the location of the config file to read from. Needs read/write permissions.
     #[clap(short, long)]
     pub config: Option<PathBuf>,

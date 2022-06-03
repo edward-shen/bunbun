@@ -1,6 +1,5 @@
 use crate::BunBunError;
 use dirs::{config_dir, home_dir};
-use log::{debug, info, trace};
 use serde::{
     de::{self, Deserializer, MapAccess, Unexpected, Visitor},
     Deserialize, Serialize,
@@ -10,6 +9,7 @@ use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::PathBuf;
+use tracing::{debug, info, trace};
 
 const CONFIG_FILENAME: &str = "bunbun.yaml";
 const DEFAULT_CONFIG: &[u8] = include_bytes!("../bunbun.default.yaml");

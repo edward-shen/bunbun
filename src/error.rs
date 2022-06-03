@@ -7,7 +7,6 @@ pub enum BunBunError {
     Io(std::io::Error),
     Parse(serde_yaml::Error),
     Watch(hotwatch::Error),
-    LoggerInit(log::SetLoggerError),
     CustomProgram(String),
     NoValidConfigPath,
     InvalidConfigPath(std::path::PathBuf, std::io::Error),
@@ -24,7 +23,6 @@ impl fmt::Display for BunBunError {
             Self::Io(e) => e.fmt(f),
             Self::Parse(e) => e.fmt(f),
             Self::Watch(e) => e.fmt(f),
-            Self::LoggerInit(e) => e.fmt(f),
             Self::CustomProgram(msg) => msg.fmt(f),
             Self::NoValidConfigPath => write!(f, "No valid config path was found!"),
             Self::InvalidConfigPath(path, reason) => {
@@ -52,5 +50,4 @@ macro_rules! from_error {
 from_error!(std::io::Error, Io);
 from_error!(serde_yaml::Error, Parse);
 from_error!(hotwatch::Error, Watch);
-from_error!(log::SetLoggerError, LoggerInit);
 from_error!(serde_json::Error, JsonParse);
