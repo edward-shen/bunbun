@@ -104,20 +104,21 @@ pub async fn hop(
       };
 
       match resolved_template {
-        Ok(HopAction::Redirect(path)) => Response::builder()
-          .status(StatusCode::FOUND)
-          .header(header::LOCATION, &path)
-          .body(boxed(Full::from(
-            handlebars
-              .render_template(
-                &path,
-                &template_args::query(utf8_percent_encode(
-                  &args,
-                  FRAGMENT_ENCODE_SET,
-                )),
-              )
-              .unwrap(),
-          ))),
+        Ok(HopAction::Redirect(path)) => {
+          let rendered = handlebars
+            .render_template(
+              &path,
+              &template_args::query(utf8_percent_encode(
+                &args,
+                FRAGMENT_ENCODE_SET,
+              )),
+            )
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+          Response::builder()
+            .status(StatusCode::FOUND)
+            .header(header::LOCATION, &path)
+            .body(boxed(Full::from(rendered)))
+        }
         Ok(HopAction::Body(body)) => Response::builder()
           .status(StatusCode::OK)
           .body(boxed(Full::new(Bytes::from(body)))),
@@ -128,13 +129,12 @@ pub async fn hop(
             .body(boxed(Full::from("Something went wrong :(\n")))
         }
       }
-      .unwrap()
     }
     RouteResolution::Unresolved => Response::builder()
       .status(StatusCode::NOT_FOUND)
-      .body(boxed(Full::from("not found\n")))
-      .unwrap(),
+      .body(boxed(Full::from("not found\n"))),
   }
+  .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
 #[derive(Debug, PartialEq)]
