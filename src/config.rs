@@ -267,7 +267,7 @@ pub fn get_config_data() -> Result<FileData, BunBunError> {
   debug!("Checking locations for config file: {:?}", &locations);
 
   for location in &locations {
-    let file = OpenOptions::new().read(true).open(location.clone());
+    let file = OpenOptions::new().read(true).open(location);
     match file {
       Ok(file) => {
         debug!("Found file at {location:?}.");
