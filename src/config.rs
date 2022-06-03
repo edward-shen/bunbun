@@ -60,6 +60,32 @@ impl FromStr for Route {
   }
 }
 
+impl From<String> for Route {
+  fn from(s: String) -> Self {
+    Self {
+      route_type: get_route_type(&s),
+      path: s,
+      hidden: false,
+      description: None,
+      min_args: None,
+      max_args: None,
+    }
+  }
+}
+
+impl From<&'static str> for Route {
+  fn from(s: &'static str) -> Self {
+    Self {
+      route_type: get_route_type(s),
+      path: s.to_string(),
+      hidden: false,
+      description: None,
+      min_args: None,
+      max_args: None,
+    }
+  }
+}
+
 /// Deserialization of the route string into the enum requires us to figure out
 /// whether or not the string is valid to run as an executable or not. To
 /// determine this, we simply check if it exists on disk or assume that it's a
@@ -147,8 +173,7 @@ impl<'de> Deserialize<'de> for Route {
             {
               return Err(de::Error::invalid_value(
                 Unexpected::Other(&format!(
-                  "argument count range {} to {}",
-                  min_args, max_args
+                  "argument count range {min_args} to {max_args}",
                 )),
                 &"a valid argument count range",
               ));
@@ -179,12 +204,12 @@ impl std::fmt::Display for Route {
         route_type: RouteType::External,
         path,
         ..
-      } => write!(f, "raw ({})", path),
+      } => write!(f, "raw ({path})"),
       Self {
         route_type: RouteType::Internal,
         path,
         ..
-      } => write!(f, "file ({})", path),
+      } => write!(f, "file ({path})"),
     }
   }
 }
@@ -192,10 +217,10 @@ impl std::fmt::Display for Route {
 /// Classifies the path depending on if the there exists a local file.
 fn get_route_type(path: &str) -> RouteType {
   if std::path::Path::new(path).exists() {
-    debug!("Parsed {} as a valid local path.", path);
+    debug!("Parsed {path} as a valid local path.");
     RouteType::Internal
   } else {
-    debug!("{} does not exist on disk, assuming web path.", path);
+    debug!("{path} does not exist on disk, assuming web path.");
     RouteType::External
   }
 }
@@ -245,16 +270,15 @@ pub fn get_config_data() -> Result<ConfigData, BunBunError> {
     let file = OpenOptions::new().read(true).open(location.clone());
     match file {
       Ok(file) => {
-        debug!("Found file at {:?}.", location);
+        debug!("Found file at {location:?}.");
         return Ok(ConfigData {
           path: location.clone(),
           file,
         });
       }
-      Err(e) => debug!(
-        "Tried to read '{:?}' but failed due to error: {}",
-        location, e
-      ),
+      Err(e) => {
+        debug!("Tried to read '{location:?}' but failed due to error: {e}",)
+      }
     }
   }
 
@@ -270,7 +294,7 @@ pub fn get_config_data() -> Result<ConfigData, BunBunError> {
       .open(location.clone());
     match file {
       Ok(mut file) => {
-        info!("Creating new config file at {:?}.", location);
+        info!("Creating new config file at {location:?}.");
         file.write_all(DEFAULT_CONFIG)?;
 
         let file = OpenOptions::new().read(true).open(location.clone())?;
@@ -280,8 +304,7 @@ pub fn get_config_data() -> Result<ConfigData, BunBunError> {
         });
       }
       Err(e) => debug!(
-        "Tried to open a new file at '{:?}' but failed due to error: {}",
-        location, e
+        "Tried to open a new file at '{location:?}' but failed due to error: {e}",
       ),
     }
   }
@@ -329,90 +352,96 @@ pub fn read_config(
 #[cfg(test)]
 mod route {
   use super::*;
+  use anyhow::{Context, Result};
   use serde_yaml::{from_str, to_string};
   use tempfile::NamedTempFile;
 
   #[test]
-  fn deserialize_relative_path() {
-    let tmpfile = NamedTempFile::new_in(".").unwrap();
+  fn deserialize_relative_path() -> Result<()> {
+    let tmpfile = NamedTempFile::new_in(".")?;
     let path = format!("{}", tmpfile.path().display());
-    let path = path.get(path.rfind(".").unwrap()..).unwrap();
+    let path = path
+      .get(path.rfind(".").context("While finding .")?..)
+      .context("While getting the path")?;
     let path = std::path::Path::new(path);
     assert!(path.is_relative());
-    let path = path.to_str().unwrap();
-    assert_eq!(
-      from_str::<Route>(path).unwrap(),
-      Route::from_str(path).unwrap()
-    );
+    let path = path.to_str().context("While stringifying path")?;
+    assert_eq!(from_str::<Route>(path)?, Route::from_str(path)?);
+    Ok(())
   }
 
   #[test]
-  fn deserialize_absolute_path() {
-    let tmpfile = NamedTempFile::new().unwrap();
+  fn deserialize_absolute_path() -> Result<()> {
+    let tmpfile = NamedTempFile::new()?;
     let path = format!("{}", tmpfile.path().display());
     assert!(tmpfile.path().is_absolute());
-    assert_eq!(
-      from_str::<Route>(&path).unwrap(),
-      Route::from_str(&path).unwrap()
-    );
+    assert_eq!(from_str::<Route>(&path)?, Route::from_str(&path)?);
+
+    Ok(())
   }
 
   #[test]
-  fn deserialize_http_path() {
+  fn deserialize_http_path() -> Result<()> {
     assert_eq!(
-      from_str::<Route>("http://google.com").unwrap(),
-      Route::from_str("http://google.com").unwrap()
+      from_str::<Route>("http://google.com")?,
+      Route::from_str("http://google.com")?
     );
+    Ok(())
   }
 
   #[test]
-  fn deserialize_https_path() {
+  fn deserialize_https_path() -> Result<()> {
     assert_eq!(
-      from_str::<Route>("https://google.com").unwrap(),
-      Route::from_str("https://google.com").unwrap()
+      from_str::<Route>("https://google.com")?,
+      Route::from_str("https://google.com")?
     );
+    Ok(())
   }
 
   #[test]
-  fn serialize() {
+  fn serialize() -> Result<()> {
     assert_eq!(
-      &to_string(&Route::from_str("hello world").unwrap()).unwrap(),
+      &to_string(&Route::from_str("hello world")?)?,
       "---\nroute_type: External\npath: hello world\nhidden: false\ndescription: ~\nmin_args: ~\nmax_args: ~\n"
     );
+    Ok(())
   }
 }
 
 #[cfg(test)]
 mod read_config {
   use super::*;
+  use anyhow::Result;
 
   #[test]
-  fn empty_file() {
-    let config_file = tempfile::tempfile().unwrap();
+  fn empty_file() -> Result<()> {
+    let config_file = tempfile::tempfile()?;
     assert!(matches!(
       read_config(config_file, false),
       Err(BunBunError::ZeroByteConfig)
     ));
+    Ok(())
   }
 
   #[test]
-  fn config_too_large() {
-    let mut config_file = tempfile::tempfile().unwrap();
+  fn config_too_large() -> Result<()> {
+    let mut config_file = tempfile::tempfile()?;
     let size_to_write = (LARGE_FILE_SIZE_THRESHOLD + 1) as usize;
-    config_file.write(&[0].repeat(size_to_write)).unwrap();
+    config_file.write(&[0].repeat(size_to_write))?;
     match read_config(config_file, false) {
       Err(BunBunError::ConfigTooLarge(size))
         if size as usize == size_to_write => {}
       Err(BunBunError::ConfigTooLarge(size)) => {
         panic!("Mismatched size: {} != {}", size, size_to_write)
       }
-      res => panic!("Wrong result, got {:#?}", res),
+      res => panic!("Wrong result, got {res:#?}"),
     }
+    Ok(())
   }
 
   #[test]
-  fn valid_config() {
-    let config_file = File::open("bunbun.default.yaml").unwrap();
-    assert!(read_config(config_file, false).is_ok());
+  fn valid_config() -> Result<()> {
+    assert!(read_config(File::open("bunbun.default.yaml")?, false).is_ok());
+    Ok(())
   }
 }

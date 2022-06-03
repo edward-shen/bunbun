@@ -10,14 +10,17 @@ repository = "https://github.com/edward-shen/bunbun"
 exclude = ["/aux/"]
 
 [dependencies]
-actix-web = "3"
+anyhow = "1"
+arc-swap = "1"
+tokio = { version = "1", features = ["full"] }
+axum = "0.5"
 clap = { version = "3", features = ["wrap_help", "derive", "cargo"] }
 dirs = "4"
 handlebars = "4"
 hotwatch = "0.4"
 log = "0.4"
 percent-encoding = "2"
-serde = "1"
+serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.8"
 serde_json = "1"
 simple_logger = "2"

@@ -27,9 +27,9 @@ impl fmt::Display for BunBunError {
       Self::CustomProgram(msg) => write!(f, "{}", msg),
       Self::NoValidConfigPath => write!(f, "No valid config path was found!"),
       Self::InvalidConfigPath(path, reason) => {
-        write!(f, "Failed to access {:?}: {}", path, reason)
+        write!(f, "Failed to access {path:?}: {reason}")
       }
-      Self::ConfigTooLarge(size) => write!(f, "The config file was too large ({} bytes)! Pass in --large-config to bypass this check.", size),
+      Self::ConfigTooLarge(size) => write!(f, "The config file was too large ({size} bytes)! Pass in --large-config to bypass this check."),
       Self::ZeroByteConfig => write!(f, "The config provided reported a size of 0 bytes. Please check your config path!"),
       Self::JsonParse(e) => e.fmt(f),
     }

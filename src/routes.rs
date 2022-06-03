@@ -1,8 +1,11 @@
 use crate::config::{Route as ConfigRoute, RouteType};
 use crate::{template_args, BunBunError, Route, State};
-use actix_web::web::{Data, Query};
-use actix_web::{get, http::header};
-use actix_web::{HttpRequest, HttpResponse, Responder};
+use arc_swap::ArcSwap;
+use axum::body::{boxed, Bytes, Full};
+use axum::extract::Query;
+use axum::http::{header, StatusCode};
+use axum::response::{Html, IntoResponse, Response};
+use axum::Extension;
 use handlebars::Handlebars;
 use log::{debug, error};
 use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
@@ -10,7 +13,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 /// https://url.spec.whatwg.org/#fragment-percent-encode-set
 const FRAGMENT_ENCODE_SET: &AsciiSet = &CONTROLS
@@ -24,71 +27,62 @@ const FRAGMENT_ENCODE_SET: &AsciiSet = &CONTROLS
   .add(b'#') // Interpreted as a hyperlink section target
   .add(b'\'');
 
-type StateData = Data<Arc<RwLock<State>>>;
-
-#[get("/")]
-pub async fn index(data: StateData, req: HttpRequest) -> impl Responder {
-  let data = data.read().unwrap();
-  HttpResponse::Ok()
-    .set_header(header::CONTENT_TYPE, "text/html; charset=utf-8")
-    .body(
-      req
-        .app_data::<Handlebars>()
-        .unwrap()
-        .render(
-          "index",
-          &template_args::hostname(data.public_address.clone()),
-        )
-        .unwrap(),
+pub async fn index(
+  Extension(data): Extension<Arc<ArcSwap<State>>>,
+  Extension(handlebars): Extension<Handlebars<'static>>,
+) -> impl IntoResponse {
+  handlebars
+    .render(
+      "index",
+      &template_args::hostname(&data.load().public_address),
     )
+    .map(Html)
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
-#[get("/bunbunsearch.xml")]
-pub async fn opensearch(data: StateData, req: HttpRequest) -> impl Responder {
-  let data = data.read().unwrap();
-  HttpResponse::Ok()
-    .header(
-      header::CONTENT_TYPE,
-      "application/opensearchdescription+xml",
+pub async fn opensearch(
+  Extension(data): Extension<Arc<ArcSwap<State>>>,
+  Extension(handlebars): Extension<Handlebars<'static>>,
+) -> impl IntoResponse {
+  handlebars
+    .render(
+      "opensearch",
+      &template_args::hostname(&data.load().public_address),
     )
-    .body(
-      req
-        .app_data::<Handlebars>()
-        .unwrap()
-        .render(
-          "opensearch",
-          &template_args::hostname(data.public_address.clone()),
-        )
-        .unwrap(),
-    )
+    .map(|body| {
+      (
+        StatusCode::OK,
+        [(
+          header::CONTENT_TYPE,
+          "application/opensearchdescription+xml",
+        )],
+        body,
+      )
+    })
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
-#[get("/ls")]
-pub async fn list(data: StateData, req: HttpRequest) -> impl Responder {
-  let data = data.read().unwrap();
-  HttpResponse::Ok()
-    .set_header(header::CONTENT_TYPE, "text/html; charset=utf-8")
-    .body(
-      req
-        .app_data::<Handlebars>()
-        .unwrap()
-        .render("list", &data.groups)
-        .unwrap(),
-    )
+pub async fn list(
+  Extension(data): Extension<Arc<ArcSwap<State>>>,
+  Extension(handlebars): Extension<Handlebars<'static>>,
+) -> impl IntoResponse {
+  handlebars
+    .render("list", &data.load().groups)
+    .map(Html)
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct SearchQuery {
   to: String,
 }
 
-#[get("/hop")]
 pub async fn hop(
-  data: StateData,
-  req: HttpRequest,
-  query: Query<SearchQuery>,
-) -> impl Responder {
-  let data = data.read().unwrap();
+  Extension(data): Extension<Arc<ArcSwap<State>>>,
+  Extension(handlebars): Extension<Handlebars<'static>>,
+  Query(query): Query<SearchQuery>,
+) -> impl IntoResponse {
+  let data = data.load();
 
   match resolve_hop(&query.to, &data.routes, &data.default_route) {
     RouteResolution::Resolved { route: path, args } => {
@@ -106,29 +100,36 @@ pub async fn hop(
       };
 
       match resolved_template {
-        Ok(HopAction::Redirect(path)) => HttpResponse::Found()
-          .header(
-            header::LOCATION,
-            req
-              .app_data::<Handlebars>()
-              .unwrap()
+        Ok(HopAction::Redirect(path)) => Response::builder()
+          .status(StatusCode::FOUND)
+          .header(header::LOCATION, &path)
+          .body(boxed(Full::from(
+            handlebars
               .render_template(
-                std::str::from_utf8(path.as_bytes()).unwrap(),
-                &template_args::query(
-                  utf8_percent_encode(&args, FRAGMENT_ENCODE_SET).to_string(),
-                ),
+                &path,
+                &template_args::query(utf8_percent_encode(
+                  &args,
+                  FRAGMENT_ENCODE_SET,
+                )),
               )
               .unwrap(),
-          )
-          .finish(),
-        Ok(HopAction::Body(body)) => HttpResponse::Ok().body(body),
+          ))),
+        Ok(HopAction::Body(body)) => Response::builder()
+          .status(StatusCode::OK)
+          .body(boxed(Full::new(Bytes::from(body)))),
         Err(e) => {
           error!("Failed to redirect user for {}: {}", path, e);
-          HttpResponse::InternalServerError().body("Something went wrong :(\n")
+          Response::builder()
+            .status(StatusCode::INTERNAL_SERVER_ERROR)
+            .body(boxed(Full::from("Something went wrong :(\n")))
         }
       }
+      .unwrap()
     }
-    RouteResolution::Unresolved => HttpResponse::NotFound().body("not found"),
+    RouteResolution::Unresolved => Response::builder()
+      .status(StatusCode::NOT_FOUND)
+      .body(boxed(Full::from("not found\n")))
+      .unwrap(),
   }
 }
 
@@ -236,6 +237,7 @@ fn resolve_path(path: PathBuf, args: &str) -> Result<HopAction, BunBunError> {
 #[cfg(test)]
 mod resolve_hop {
   use super::*;
+  use anyhow::Result;
   use std::str::FromStr;
 
   fn generate_route_result<'a>(
@@ -269,51 +271,45 @@ mod resolve_hop {
   }
 
   #[test]
-  fn only_default_routes_some_default_yields_default_hop() {
+  fn only_default_routes_some_default_yields_default_hop() -> Result<()> {
     let mut map: HashMap<String, Route> = HashMap::new();
-    map.insert(
-      "google".into(),
-      Route::from_str("https://example.com").unwrap(),
-    );
+    map.insert("google".into(), Route::from_str("https://example.com")?);
     assert_eq!(
       resolve_hop("hello world", &map, &Some(String::from("google"))),
       generate_route_result(
-        &Route::from_str("https://example.com").unwrap(),
+        &Route::from_str("https://example.com")?,
         "hello world"
       ),
     );
+    Ok(())
   }
 
   #[test]
-  fn non_default_routes_some_default_yields_non_default_hop() {
+  fn non_default_routes_some_default_yields_non_default_hop() -> Result<()> {
     let mut map: HashMap<String, Route> = HashMap::new();
-    map.insert(
-      "google".into(),
-      Route::from_str("https://example.com").unwrap(),
-    );
+    map.insert("google".into(), Route::from_str("https://example.com")?);
     assert_eq!(
       resolve_hop("google hello world", &map, &Some(String::from("a"))),
       generate_route_result(
-        &Route::from_str("https://example.com").unwrap(),
+        &Route::from_str("https://example.com")?,
         "hello world"
       ),
     );
+    Ok(())
   }
 
   #[test]
-  fn non_default_routes_no_default_yields_non_default_hop() {
+  fn non_default_routes_no_default_yields_non_default_hop() -> Result<()> {
     let mut map: HashMap<String, Route> = HashMap::new();
-    map.insert(
-      "google".into(),
-      Route::from_str("https://example.com").unwrap(),
-    );
+    map.insert("google".into(), Route::from_str("https://example.com")?);
     assert_eq!(
       resolve_hop("google hello world", &map, &None),
       generate_route_result(
-        &Route::from_str("https://example.com").unwrap(),
+        &Route::from_str("https://example.com")?,
         "hello world"
       ),
     );
+    Ok(())
   }
 }
 
@@ -371,6 +367,7 @@ mod check_route {
 #[cfg(test)]
 mod resolve_path {
   use super::{resolve_path, HopAction};
+  use anyhow::Result;
   use std::env::current_dir;
   use std::path::PathBuf;
 
@@ -387,12 +384,13 @@ mod resolve_path {
   }
 
   #[test]
-  fn relative_path_returns_ok() {
+  fn relative_path_returns_ok() -> Result<()> {
     // How many ".." needed to get to /
-    let nest_level = current_dir().unwrap().ancestors().count() - 1;
+    let nest_level = current_dir()?.ancestors().count() - 1;
     let mut rel_path = PathBuf::from("../".repeat(nest_level));
     rel_path.push("./bin/echo");
     assert!(resolve_path(rel_path, r#"{"body": "a"}"#).is_ok());
+    Ok(())
   }
 
   #[test]
@@ -414,18 +412,21 @@ mod resolve_path {
   }
 
   #[test]
-  fn return_body() {
+  fn return_body() -> Result<()> {
     assert_eq!(
-      resolve_path(PathBuf::from("/bin/echo"), r#"{"body": "a"}"#).unwrap(),
+      resolve_path(PathBuf::from("/bin/echo"), r#"{"body": "a"}"#)?,
       HopAction::Body("a".to_string())
     );
+
+    Ok(())
   }
 
   #[test]
-  fn return_redirect() {
+  fn return_redirect() -> Result<()> {
     assert_eq!(
-      resolve_path(PathBuf::from("/bin/echo"), r#"{"redirect": "a"}"#).unwrap(),
+      resolve_path(PathBuf::from("/bin/echo"), r#"{"redirect": "a"}"#)?,
       HopAction::Redirect("a".to_string())
     );
+    Ok(())
   }
 }

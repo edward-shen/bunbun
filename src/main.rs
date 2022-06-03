@@ -9,16 +9,19 @@ use crate::config::{
   get_config_data, load_custom_path_config, read_config, ConfigData, Route,
   RouteGroup,
 };
-use actix_web::{middleware::Logger, App, HttpServer};
+use anyhow::Result;
+use arc_swap::ArcSwap;
+use axum::routing::get;
+use axum::{Extension, Router};
 use clap::Parser;
 use error::BunBunError;
-use handlebars::{Handlebars, TemplateError};
+use handlebars::Handlebars;
 use hotwatch::{Event, Hotwatch};
-use log::{debug, error, info, trace, warn};
+use log::{debug, info, trace, warn};
 use simple_logger::SimpleLogger;
 use std::cmp::min;
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::time::Duration;
 
 mod cli;
@@ -39,20 +42,9 @@ pub struct State {
   routes: HashMap<String, Route>,
 }
 
-#[actix_web::main]
+#[tokio::main]
 #[cfg(not(tarpaulin_include))]
-async fn main() {
-  std::process::exit(match run().await {
-    Ok(_) => 0,
-    Err(e) => {
-      error!("{}", e);
-      1
-    }
-  })
-}
-
-#[cfg(not(tarpaulin_include))]
-async fn run() -> Result<(), BunBunError> {
+async fn main() -> Result<()> {
   let opts = cli::Opts::parse();
 
   init_logger(opts.verbose, opts.quiet)?;
@@ -63,7 +55,7 @@ async fn run() -> Result<(), BunBunError> {
   }?;
 
   let conf = read_config(conf_data.file.try_clone()?, opts.large_config)?;
-  let state = Arc::from(RwLock::new(State {
+  let state = Arc::from(ArcSwap::from_pointee(State {
     public_address: conf.public_address,
     default_route: conf.default_route,
     routes: cache_routes(&conf.groups),
@@ -71,27 +63,19 @@ async fn run() -> Result<(), BunBunError> {
   }));
 
   // Cannot be named _ or Rust will immediately drop it.
-  let _watch = start_watch(Arc::clone(&state), conf_data, opts.large_config)?;
+  let _watch = start_watch(Arc::clone(&state), conf_data, opts.large_config);
 
-  HttpServer::new(move || {
-    let templates = match compile_templates() {
-      Ok(templates) => templates,
-      // This implies a template error, which should be a compile time error. If
-      // we reach here then the release is very broken.
-      Err(e) => unreachable!("Failed to compile templates: {}", e),
-    };
-    App::new()
-      .data(Arc::clone(&state))
-      .app_data(templates)
-      .wrap(Logger::default())
-      .service(routes::hop)
-      .service(routes::list)
-      .service(routes::index)
-      .service(routes::opensearch)
-  })
-  .bind(&conf.bind_address)?
-  .run()
-  .await?;
+  let app = Router::new()
+    .route("/", get(routes::index))
+    .route("/bunbunsearch.xml", get(routes::opensearch))
+    .route("/ls", get(routes::list))
+    .route("/hop", get(routes::hop))
+    .layer(Extension(compile_templates()?))
+    .layer(Extension(state));
+
+  axum::Server::bind(&conf.bind_address.parse()?)
+    .serve(app.into_make_service())
+    .await?;
 
   Ok(())
 }
@@ -100,10 +84,7 @@ async fn run() -> Result<(), BunBunError> {
 /// in. Usually, these values are mutually exclusive, that is, if the number of
 /// verbose flags is non-zero then the quiet flag is zero, and vice versa.
 #[cfg(not(tarpaulin_include))]
-fn init_logger(
-  num_verbose_flags: u8,
-  num_quiet_flags: u8,
-) -> Result<(), BunBunError> {
+fn init_logger(num_verbose_flags: u8, num_quiet_flags: u8) -> Result<()> {
   let log_level =
     match min(num_verbose_flags, 3) as i8 - min(num_quiet_flags, 2) as i8 {
       -2 => None,
@@ -143,7 +124,7 @@ fn cache_routes(groups: &[RouteGroup]) -> HashMap<String, Route> {
 /// Returns an instance with all pre-generated templates included into the
 /// binary. This allows for users to have a portable binary without needed the
 /// templates at runtime.
-fn compile_templates() -> Result<Handlebars<'static>, TemplateError> {
+fn compile_templates() -> Result<Handlebars<'static>> {
   let mut handlebars = Handlebars::new();
   handlebars.set_strict_mode(true);
   handlebars.register_partial("bunbun_version", env!("CARGO_PKG_VERSION"))?;
@@ -176,10 +157,10 @@ fn compile_templates() -> Result<Handlebars<'static>, TemplateError> {
 /// watches.
 #[cfg(not(tarpaulin_include))]
 fn start_watch(
-  state: Arc<RwLock<State>>,
+  state: Arc<ArcSwap<State>>,
   config_data: ConfigData,
   large_config: bool,
-) -> Result<Hotwatch, BunBunError> {
+) -> Result<Hotwatch> {
   let mut watch = Hotwatch::new_with_custom_delay(Duration::from_millis(500))?;
   let ConfigData { path, mut file } = config_data;
   let watch_result = watch.watch(&path, move |e: Event| {
@@ -193,33 +174,32 @@ fn start_watch(
     match e {
       Event::Write(_) | Event::Create(_) => {
         trace!("Grabbing writer lock on state...");
-        let mut state =
-          state.write().expect("Failed to get write lock on state");
         trace!("Obtained writer lock on state!");
         match read_config(
           file.try_clone().expect("Failed to clone file handle"),
           large_config,
         ) {
           Ok(conf) => {
-            state.public_address = conf.public_address;
-            state.default_route = conf.default_route;
-            state.routes = cache_routes(&conf.groups);
-            state.groups = conf.groups;
+            state.store(Arc::new(State {
+              public_address: conf.public_address,
+              default_route: conf.default_route,
+              routes: cache_routes(&conf.groups),
+              groups: conf.groups,
+            }));
             info!("Successfully updated active state");
           }
-          Err(e) => warn!("Failed to update config file: {}", e),
+          Err(e) => warn!("Failed to update config file: {e}"),
         }
       }
-      _ => debug!("Saw event {:#?} but ignored it", e),
+      _ => debug!("Saw event {e:#?} but ignored it"),
     }
   });
 
   match watch_result {
-    Ok(_) => info!("Watcher is now watching {:?}", &path),
-    Err(e) => warn!(
-      "Couldn't watch {:?}: {}. Changes to this file won't be seen!",
-      &path, e
-    ),
+    Ok(_) => info!("Watcher is now watching {path:?}"),
+    Err(e) => {
+      warn!("Couldn't watch {path:?}: {e}. Changes to this file won't be seen!",)
+    }
   }
 
   Ok(watch)
@@ -228,9 +208,10 @@ fn start_watch(
 #[cfg(test)]
 mod init_logger {
   use super::*;
+  use anyhow::Result;
 
   #[test]
-  fn defaults_to_warn() -> Result<(), BunBunError> {
+  fn defaults_to_warn() -> Result<()> {
     init_logger(0, 0)?;
     assert_eq!(log::max_level(), log::Level::Warn);
     Ok(())
@@ -242,7 +223,7 @@ mod init_logger {
 
   #[test]
   #[ignore]
-  fn caps_to_2_when_log_level_is_lt_2() -> Result<(), BunBunError> {
+  fn caps_to_2_when_log_level_is_lt_2() -> Result<()> {
     init_logger(0, 3)?;
     assert_eq!(log::max_level(), log::LevelFilter::Off);
     Ok(())
@@ -250,7 +231,7 @@ mod init_logger {
 
   #[test]
   #[ignore]
-  fn caps_to_3_when_log_level_is_gt_3() -> Result<(), BunBunError> {
+  fn caps_to_3_when_log_level_is_gt_3() -> Result<()> {
     init_logger(4, 0)?;
     assert_eq!(log::max_level(), log::Level::Trace);
     Ok(())
@@ -261,15 +242,14 @@ mod init_logger {
 mod cache_routes {
   use super::*;
   use std::iter::FromIterator;
-  use std::str::FromStr;
 
   fn generate_external_routes(
-    routes: &[(&str, &str)],
+    routes: &[(&'static str, &'static str)],
   ) -> HashMap<String, Route> {
     HashMap::from_iter(
       routes
         .into_iter()
-        .map(|kv| (kv.0.into(), Route::from_str(kv.1).unwrap())),
+        .map(|(key, value)| ((*key).to_owned(), Route::from(*value))),
     )
   }
 
