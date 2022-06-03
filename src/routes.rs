@@ -21,7 +21,8 @@ const FRAGMENT_ENCODE_SET: &AsciiSet = &CONTROLS
   .add(b'`')
   .add(b'+')
   .add(b'&') // Interpreted as a GET query
-  .add(b'#'); // Interpreted as a hyperlink section target
+  .add(b'#') // Interpreted as a hyperlink section target
+  .add(b'\'');
 
 type StateData = Data<Arc<RwLock<State>>>;
 
