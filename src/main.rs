@@ -10,7 +10,7 @@ use crate::config::{
   RouteGroup,
 };
 use actix_web::{middleware::Logger, App, HttpServer};
-use clap::Clap;
+use clap::Parser;
 use error::BunBunError;
 use handlebars::{Handlebars, TemplateError};
 use hotwatch::{Event, Hotwatch};

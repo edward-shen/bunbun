@@ -2,7 +2,7 @@
 name = "bunbun"
 version = "0.8.0"
 authors = ["Edward Shen <code@eddie.sh>"]
-edition = "2018"
+edition = "2021"
 description = "Re-implementation of bunny1 in Rust"
 license = "AGPL-3.0"
 readme = "README.md"
@@ -11,16 +11,16 @@ exclude = ["/aux/"]
 
 [dependencies]
 actix-web = "3"
-clap = { version = "3.0.0-beta.2", features = ["wrap_help"] }
-dirs = "3"
-handlebars = "3"
+clap = { version = "3", features = ["wrap_help", "derive", "cargo"] }
+dirs = "4"
+handlebars = "4"
 hotwatch = "0.4"
 log = "0.4"
 percent-encoding = "2"
 serde = "1"
 serde_yaml = "0.8"
 serde_json = "1"
-simple_logger = "1"
+simple_logger = "2"
 
 [dev-dependencies]
 tempfile = "3"
