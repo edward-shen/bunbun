@@ -1,7 +1,7 @@
 use crate::config::{Route as ConfigRoute, RouteType};
 use crate::{template_args, BunBunError, Route, State};
 use arc_swap::ArcSwap;
-use axum::body::{boxed, Bytes, Full};
+use axum::body::{boxed, Bytes, Empty, Full};
 use axum::extract::Query;
 use axum::http::{header, StatusCode};
 use axum::response::{Html, IntoResponse, Response};
@@ -9,6 +9,7 @@ use axum::Extension;
 use handlebars::Handlebars;
 use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use serde::Deserialize;
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::path::Path;
 use std::process::Command;
@@ -88,7 +89,7 @@ pub async fn hop(
 ) -> impl IntoResponse {
     let data = data.load();
 
-    match resolve_hop(&query.to, &data.routes, &data.default_route) {
+    match resolve_hop(&query.to, &data.routes, data.default_route.as_deref()) {
         RouteResolution::Resolved { route: path, args } => {
             let resolved_template = match path {
                 ConfigRoute {
@@ -100,7 +101,7 @@ pub async fn hop(
                     route_type: RouteType::External,
                     path,
                     ..
-                } => Ok(HopAction::Redirect(path.clone())),
+                } => Ok(HopAction::Redirect(Cow::Borrowed(path))),
             };
 
             match resolved_template {
@@ -113,8 +114,8 @@ pub async fn hop(
                         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
                     Response::builder()
                         .status(StatusCode::FOUND)
-                        .header(header::LOCATION, &path)
-                        .body(boxed(Full::from(rendered)))
+                        .header(header::LOCATION, rendered)
+                        .body(boxed(Empty::new()))
                 }
                 Ok(HopAction::Body(body)) => Response::builder()
                     .status(StatusCode::OK)
@@ -149,7 +150,7 @@ enum RouteResolution<'a> {
 fn resolve_hop<'a>(
     query: &str,
     routes: &'a HashMap<String, Route>,
-    default_route: &Option<String>,
+    default_route: Option<&str>,
 ) -> RouteResolution<'a> {
     let mut split_args = query.split_ascii_whitespace().peekable();
     let maybe_route = {
@@ -209,8 +210,8 @@ const fn check_route(route: &Route, arg_count: usize) -> bool {
 
 #[derive(Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-enum HopAction {
-    Redirect(String),
+enum HopAction<'a> {
+    Redirect(Cow<'a, str>),
     Body(String),
 }
 
@@ -218,13 +219,13 @@ enum HopAction {
 /// so long as the executable was successfully executed. Returns an Error if the
 /// file doesn't exist or bunbun did not have permission to read and execute the
 /// file.
-fn resolve_path(path: &Path, args: &str) -> Result<HopAction, BunBunError> {
+fn resolve_path(path: &Path, args: &str) -> Result<HopAction<'static>, BunBunError> {
     let output = Command::new(path.canonicalize()?)
         .args(args.split(' '))
         .output()?;
 
     if output.status.success() {
-        Ok(serde_json::from_slice(&output.stdout[..])?)
+        Ok(serde_json::from_slice(&output.stdout)?)
     } else {
         error!(
             "Program exit code for {} was not 0! Dumping standard error!",
@@ -250,7 +251,7 @@ mod resolve_hop {
     #[test]
     fn empty_routes_no_default_yields_failed_hop() {
         assert_eq!(
-            resolve_hop("hello world", &HashMap::new(), &None),
+            resolve_hop("hello world", &HashMap::new(), None),
             RouteResolution::Unresolved
         );
     }
@@ -258,11 +259,7 @@ mod resolve_hop {
     #[test]
     fn empty_routes_some_default_yields_failed_hop() {
         assert_eq!(
-            resolve_hop(
-                "hello world",
-                &HashMap::new(),
-                &Some(String::from("google"))
-            ),
+            resolve_hop("hello world", &HashMap::new(), Some(&"google")),
             RouteResolution::Unresolved
         );
     }
@@ -272,7 +269,7 @@ mod resolve_hop {
         let mut map: HashMap<String, Route> = HashMap::new();
         map.insert("google".into(), Route::from("https://example.com"));
         assert_eq!(
-            resolve_hop("hello world", &map, &Some(String::from("google"))),
+            resolve_hop("hello world", &map, Some("google")),
             generate_route_result(&Route::from("https://example.com"), "hello world"),
         );
         Ok(())
@@ -283,7 +280,7 @@ mod resolve_hop {
         let mut map: HashMap<String, Route> = HashMap::new();
         map.insert("google".into(), Route::from("https://example.com"));
         assert_eq!(
-            resolve_hop("google hello world", &map, &Some(String::from("a"))),
+            resolve_hop("google hello world", &map, Some("a")),
             generate_route_result(&Route::from("https://example.com"), "hello world"),
         );
         Ok(())
@@ -294,7 +291,7 @@ mod resolve_hop {
         let mut map: HashMap<String, Route> = HashMap::new();
         map.insert("google".into(), Route::from("https://example.com"));
         assert_eq!(
-            resolve_hop("google hello world", &map, &None),
+            resolve_hop("google hello world", &map, None),
             generate_route_result(&Route::from("https://example.com"), "hello world"),
         );
         Ok(())
@@ -358,6 +355,7 @@ mod resolve_path {
 
     use super::{resolve_path, HopAction};
     use anyhow::Result;
+    use std::borrow::Cow;
     use std::env::current_dir;
     use std::io::ErrorKind;
     use std::path::{Path, PathBuf};
@@ -401,7 +399,7 @@ mod resolve_path {
     fn return_body() -> Result<()> {
         assert_eq!(
             resolve_path(&Path::new("/bin/echo"), r#"{"body": "a"}"#)?,
-            HopAction::Body("a".to_string())
+            HopAction::Body("a".to_owned())
         );
 
         Ok(())
@@ -411,7 +409,7 @@ mod resolve_path {
     fn return_redirect() -> Result<()> {
         assert_eq!(
             resolve_path(&Path::new("/bin/echo"), r#"{"redirect": "a"}"#)?,
-            HopAction::Redirect("a".to_string())
+            HopAction::Redirect(Cow::Borrowed("a"))
         );
         Ok(())
     }
