@@ -11,11 +11,11 @@ use log::{debug, error};
 use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::Path;
 use std::process::Command;
 use std::sync::Arc;
 
-/// https://url.spec.whatwg.org/#fragment-percent-encode-set
+// https://url.spec.whatwg.org/#fragment-percent-encode-set
 const FRAGMENT_ENCODE_SET: &AsciiSet = &CONTROLS
   .add(b' ')
   .add(b'"')
@@ -27,6 +27,7 @@ const FRAGMENT_ENCODE_SET: &AsciiSet = &CONTROLS
   .add(b'#') // Interpreted as a hyperlink section target
   .add(b'\'');
 
+#[allow(clippy::unused_async)]
 pub async fn index(
   Extension(data): Extension<Arc<ArcSwap<State>>>,
   Extension(handlebars): Extension<Handlebars<'static>>,
@@ -40,6 +41,7 @@ pub async fn index(
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
+#[allow(clippy::unused_async)]
 pub async fn opensearch(
   Extension(data): Extension<Arc<ArcSwap<State>>>,
   Extension(handlebars): Extension<Handlebars<'static>>,
@@ -62,6 +64,7 @@ pub async fn opensearch(
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
 }
 
+#[allow(clippy::unused_async)]
 pub async fn list(
   Extension(data): Extension<Arc<ArcSwap<State>>>,
   Extension(handlebars): Extension<Handlebars<'static>>,
@@ -77,6 +80,7 @@ pub struct SearchQuery {
   to: String,
 }
 
+#[allow(clippy::unused_async)]
 pub async fn hop(
   Extension(data): Extension<Arc<ArcSwap<State>>>,
   Extension(handlebars): Extension<Handlebars<'static>>,
@@ -91,7 +95,7 @@ pub async fn hop(
           route_type: RouteType::Internal,
           path,
           ..
-        } => resolve_path(PathBuf::from(path), &args),
+        } => resolve_path(Path::new(path), &args),
         ConfigRoute {
           route_type: RouteType::External,
           path,
@@ -190,7 +194,7 @@ fn resolve_hop<'a>(
 
 /// Checks if the user provided string has the correct properties required by
 /// the route to be successfully matched.
-fn check_route(route: &Route, arg_count: usize) -> bool {
+const fn check_route(route: &Route, arg_count: usize) -> bool {
   if let Some(min_args) = route.min_args {
     if arg_count < min_args {
       return false;
@@ -217,7 +221,7 @@ enum HopAction {
 /// so long as the executable was successfully executed. Returns an Error if the
 /// file doesn't exist or bunbun did not have permission to read and execute the
 /// file.
-fn resolve_path(path: PathBuf, args: &str) -> Result<HopAction, BunBunError> {
+fn resolve_path(path: &Path, args: &str) -> Result<HopAction, BunBunError> {
   let output = Command::new(path.canonicalize()?)
     .args(args.split(' '))
     .output()?;
@@ -369,18 +373,16 @@ mod resolve_path {
   use super::{resolve_path, HopAction};
   use anyhow::Result;
   use std::env::current_dir;
-  use std::path::PathBuf;
+  use std::path::{Path, PathBuf};
 
   #[test]
   fn invalid_path_returns_err() {
-    assert!(resolve_path(PathBuf::from("/bin/aaaa"), "aaaa").is_err());
+    assert!(resolve_path(&Path::new("/bin/aaaa"), "aaaa").is_err());
   }
 
   #[test]
   fn valid_path_returns_ok() {
-    assert!(
-      resolve_path(PathBuf::from("/bin/echo"), r#"{"body": "a"}"#).is_ok()
-    );
+    assert!(resolve_path(&Path::new("/bin/echo"), r#"{"body": "a"}"#).is_ok());
   }
 
   #[test]
@@ -389,7 +391,7 @@ mod resolve_path {
     let nest_level = current_dir()?.ancestors().count() - 1;
     let mut rel_path = PathBuf::from("../".repeat(nest_level));
     rel_path.push("./bin/echo");
-    assert!(resolve_path(rel_path, r#"{"body": "a"}"#).is_ok());
+    assert!(resolve_path(&rel_path, r#"{"body": "a"}"#).is_ok());
     Ok(())
   }
 
@@ -399,7 +401,7 @@ mod resolve_path {
       // Trying to run a command without permission
       format!(
         "{}",
-        resolve_path(PathBuf::from("/root/some_exec"), "").unwrap_err()
+        resolve_path(&Path::new("/root/some_exec"), "").unwrap_err()
       )
       .contains("Permission denied")
     );
@@ -408,13 +410,13 @@ mod resolve_path {
   #[test]
   fn non_success_exit_code_yields_err() {
     // cat-ing a folder always returns exit code 1
-    assert!(resolve_path(PathBuf::from("/bin/cat"), "/").is_err());
+    assert!(resolve_path(&Path::new("/bin/cat"), "/").is_err());
   }
 
   #[test]
   fn return_body() -> Result<()> {
     assert_eq!(
-      resolve_path(PathBuf::from("/bin/echo"), r#"{"body": "a"}"#)?,
+      resolve_path(&Path::new("/bin/echo"), r#"{"body": "a"}"#)?,
       HopAction::Body("a".to_string())
     );
 
@@ -424,7 +426,7 @@ mod resolve_path {
   #[test]
   fn return_redirect() -> Result<()> {
     assert_eq!(
-      resolve_path(PathBuf::from("/bin/echo"), r#"{"redirect": "a"}"#)?,
+      resolve_path(&Path::new("/bin/echo"), r#"{"redirect": "a"}"#)?,
       HopAction::Redirect("a".to_string())
     );
     Ok(())

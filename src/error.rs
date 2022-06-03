@@ -2,6 +2,7 @@ use std::error::Error;
 use std::fmt;
 
 #[derive(Debug)]
+#[allow(clippy::module_name_repetitions)]
 pub enum BunBunError {
   Io(std::io::Error),
   Parse(serde_yaml::Error),

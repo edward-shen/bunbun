@@ -92,7 +92,7 @@ impl From<&'static str> for Route {
 /// web path. This incurs a disk check operation, but since users shouldn't be
 /// updating the config that frequently, it should be fine.
 impl<'de> Deserialize<'de> for Route {
-  fn deserialize<D>(deserializer: D) -> Result<Route, D::Error>
+  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
   where
     D: Deserializer<'de>,
   {
@@ -233,7 +233,7 @@ pub enum RouteType {
   Internal,
 }
 
-pub struct ConfigData {
+pub struct FileData {
   pub path: PathBuf,
   pub file: File,
 }
@@ -242,19 +242,19 @@ pub struct ConfigData {
 /// locations for a place to write a config file to. In order, it checks the
 /// system-wide config location (`/etc/`, in Linux), followed by the config
 /// folder, followed by the user's home folder.
-pub fn get_config_data() -> Result<ConfigData, BunBunError> {
+pub fn get_config_data() -> Result<FileData, BunBunError> {
   // Locations to check, with highest priority first
   let locations: Vec<_> = {
     let mut folders = vec![PathBuf::from("/etc/")];
 
     // Config folder
     if let Some(folder) = config_dir() {
-      folders.push(folder)
+      folders.push(folder);
     }
 
     // Home folder
     if let Some(folder) = home_dir() {
-      folders.push(folder)
+      folders.push(folder);
     }
 
     folders
@@ -271,13 +271,13 @@ pub fn get_config_data() -> Result<ConfigData, BunBunError> {
     match file {
       Ok(file) => {
         debug!("Found file at {location:?}.");
-        return Ok(ConfigData {
+        return Ok(FileData {
           path: location.clone(),
           file,
         });
       }
       Err(e) => {
-        debug!("Tried to read '{location:?}' but failed due to error: {e}",)
+        debug!("Tried to read '{location:?}' but failed due to error: {e}");
       }
     }
   }
@@ -298,7 +298,7 @@ pub fn get_config_data() -> Result<ConfigData, BunBunError> {
         file.write_all(DEFAULT_CONFIG)?;
 
         let file = OpenOptions::new().read(true).open(location.clone())?;
-        return Ok(ConfigData {
+        return Ok(FileData {
           path: location,
           file,
         });
@@ -314,19 +314,19 @@ pub fn get_config_data() -> Result<ConfigData, BunBunError> {
 
 /// Assumes that the user knows what they're talking about and will only try
 /// to load the config at the given path.
-pub fn load_custom_path_config(
+pub fn load_custom_file(
   path: impl Into<PathBuf>,
-) -> Result<ConfigData, BunBunError> {
+) -> Result<FileData, BunBunError> {
   let path = path.into();
   let file = OpenOptions::new()
     .read(true)
     .open(&path)
     .map_err(|e| BunBunError::InvalidConfigPath(path.clone(), e))?;
 
-  Ok(ConfigData { file, path })
+  Ok(FileData { path, file })
 }
 
-pub fn read_config(
+pub fn load_file(
   mut config_file: File,
   large_config: bool,
 ) -> Result<Config, BunBunError> {
@@ -417,7 +417,7 @@ mod read_config {
   fn empty_file() -> Result<()> {
     let config_file = tempfile::tempfile()?;
     assert!(matches!(
-      read_config(config_file, false),
+      load_file(config_file, false),
       Err(BunBunError::ZeroByteConfig)
     ));
     Ok(())
@@ -428,7 +428,7 @@ mod read_config {
     let mut config_file = tempfile::tempfile()?;
     let size_to_write = (LARGE_FILE_SIZE_THRESHOLD + 1) as usize;
     config_file.write(&[0].repeat(size_to_write))?;
-    match read_config(config_file, false) {
+    match load_file(config_file, false) {
       Err(BunBunError::ConfigTooLarge(size))
         if size as usize == size_to_write => {}
       Err(BunBunError::ConfigTooLarge(size)) => {
@@ -441,7 +441,7 @@ mod read_config {
 
   #[test]
   fn valid_config() -> Result<()> {
-    assert!(read_config(File::open("bunbun.default.yaml")?, false).is_ok());
+    assert!(load_file(File::open("bunbun.default.yaml")?, false).is_ok());
     Ok(())
   }
 }

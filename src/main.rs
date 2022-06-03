@@ -1,13 +1,13 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
+#![warn(clippy::nursery, clippy::pedantic)]
 
 //! Bunbun is a pure-Rust implementation of bunny1 that provides a customizable
 //! search engine and quick-jump tool in one small binary. For information on
 //! usage, please take a look at the readme.
 
 use crate::config::{
-  get_config_data, load_custom_path_config, read_config, ConfigData, Route,
-  RouteGroup,
+  get_config_data, load_custom_file, load_file, FileData, Route, RouteGroup,
 };
 use anyhow::Result;
 use arc_swap::ArcSwap;
@@ -50,15 +50,15 @@ async fn main() -> Result<()> {
   init_logger(opts.verbose, opts.quiet)?;
 
   let conf_data = match opts.config {
-    Some(file_name) => load_custom_path_config(file_name),
+    Some(file_name) => load_custom_file(file_name),
     None => get_config_data(),
   }?;
 
-  let conf = read_config(conf_data.file.try_clone()?, opts.large_config)?;
+  let conf = load_file(conf_data.file.try_clone()?, opts.large_config)?;
   let state = Arc::from(ArcSwap::from_pointee(State {
     public_address: conf.public_address,
     default_route: conf.default_route,
-    routes: cache_routes(&conf.groups),
+    routes: cache_routes(conf.groups.clone()),
     groups: conf.groups,
   }));
 
@@ -106,14 +106,15 @@ fn init_logger(num_verbose_flags: u8, num_quiet_flags: u8) -> Result<()> {
 /// Generates a hashmap of routes from the data structure created by the config
 /// file. This should improve runtime performance and is a better solution than
 /// just iterating over the config object for every hop resolution.
-fn cache_routes(groups: &[RouteGroup]) -> HashMap<String, Route> {
+fn cache_routes(groups: Vec<RouteGroup>) -> HashMap<String, Route> {
   let mut mapping = HashMap::new();
   for group in groups {
-    for (kw, dest) in &group.routes {
+    for (kw, dest) in group.routes {
+      // This function isn't called often enough to not be a performance issue.
       match mapping.insert(kw.clone(), dest.clone()) {
-        None => trace!("Inserting {} into mapping.", kw),
+        None => trace!("Inserting {kw} into mapping."),
         Some(old_value) => {
-          trace!("Overriding {} route from {} to {}.", kw, old_value, dest)
+          trace!("Overriding {kw} route from {old_value} to {dest}.");
         }
       }
     }
@@ -158,16 +159,14 @@ fn compile_templates() -> Result<Handlebars<'static>> {
 #[cfg(not(tarpaulin_include))]
 fn start_watch(
   state: Arc<ArcSwap<State>>,
-  config_data: ConfigData,
+  config_data: FileData,
   large_config: bool,
 ) -> Result<Hotwatch> {
   let mut watch = Hotwatch::new_with_custom_delay(Duration::from_millis(500))?;
-  let ConfigData { path, mut file } = config_data;
+  let FileData { path, mut file } = config_data;
   let watch_result = watch.watch(&path, move |e: Event| {
     if let Event::Create(ref path) = e {
-      file = load_custom_path_config(path)
-        .expect("file to exist at path")
-        .file;
+      file = load_custom_file(path).expect("file to exist at path").file;
       trace!("Getting new file handler as file was recreated.");
     }
 
@@ -175,7 +174,7 @@ fn start_watch(
       Event::Write(_) | Event::Create(_) => {
         trace!("Grabbing writer lock on state...");
         trace!("Obtained writer lock on state!");
-        match read_config(
+        match load_file(
           file.try_clone().expect("Failed to clone file handle"),
           large_config,
         ) {
@@ -183,7 +182,7 @@ fn start_watch(
             state.store(Arc::new(State {
               public_address: conf.public_address,
               default_route: conf.default_route,
-              routes: cache_routes(&conf.groups),
+              routes: cache_routes(conf.groups.clone()),
               groups: conf.groups,
             }));
             info!("Successfully updated active state");
@@ -198,7 +197,9 @@ fn start_watch(
   match watch_result {
     Ok(_) => info!("Watcher is now watching {path:?}"),
     Err(e) => {
-      warn!("Couldn't watch {path:?}: {e}. Changes to this file won't be seen!",)
+      warn!(
+        "Couldn't watch {path:?}: {e}. Changes to this file won't be seen!"
+      );
     }
   }
 
@@ -255,7 +256,7 @@ mod cache_routes {
 
   #[test]
   fn empty_groups_yield_empty_routes() {
-    assert_eq!(cache_routes(&[]), HashMap::new());
+    assert_eq!(cache_routes(Vec::new()), HashMap::new());
   }
 
   #[test]
@@ -275,7 +276,7 @@ mod cache_routes {
     };
 
     assert_eq!(
-      cache_routes(&[group1, group2]),
+      cache_routes(vec![group1, group2]),
       generate_external_routes(&[
         ("a", "b"),
         ("c", "d"),
@@ -302,7 +303,7 @@ mod cache_routes {
     };
 
     assert_eq!(
-      cache_routes(&[group1.clone(), group2]),
+      cache_routes(vec![group1.clone(), group2]),
       generate_external_routes(&[("a", "1"), ("c", "2")])
     );
 
@@ -314,7 +315,7 @@ mod cache_routes {
     };
 
     assert_eq!(
-      cache_routes(&[group1, group3]),
+      cache_routes(vec![group1, group3]),
       generate_external_routes(&[("a", "1"), ("b", "2"), ("c", "d")])
     );
   }

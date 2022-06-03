@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use percent_encoding::PercentEncode;
 use serde::Serialize;
 
-pub fn query<'a>(query: PercentEncode<'a>) -> impl Serialize + 'a {
+pub fn query(query: PercentEncode<'_>) -> impl Serialize + '_ {
   #[derive(Serialize)]
   struct TemplateArgs<'a> {
     query: Cow<'a, str>,
@@ -13,7 +13,7 @@ pub fn query<'a>(query: PercentEncode<'a>) -> impl Serialize + 'a {
   }
 }
 
-pub fn hostname<'a>(hostname: &'a str) -> impl Serialize + 'a {
+pub fn hostname(hostname: &'_ str) -> impl Serialize + '_ {
   #[derive(Serialize)]
   pub struct TemplateArgs<'a> {
     pub hostname: &'a str,
