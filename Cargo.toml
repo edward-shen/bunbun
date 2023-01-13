@@ -13,14 +13,14 @@ exclude = ["/aux/"]
 anyhow = "1"
 arc-swap = "1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
-axum = "0.5"
-clap = { version = "3", features = ["wrap_help", "derive", "cargo"] }
+axum = "0.6"
+clap = { version = "4", features = ["wrap_help", "derive", "cargo"] }
 dirs = "4"
 handlebars = "4"
 hotwatch = "0.4"
 percent-encoding = "2"
 serde = { version = "1", features = ["derive"] }
-serde_yaml = "0.8"
+serde_yaml = "0.9"
 serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
