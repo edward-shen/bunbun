@@ -57,10 +57,7 @@ async fn main() -> Result<()> {
         .with(env_filter)
         .init();
 
-    let conf_data = match opts.config {
-        Some(file_name) => load_custom_file(file_name),
-        None => get_config_data(),
-    }?;
+    let conf_data = opts.config.map_or_else(get_config_data, load_custom_file)?;
 
     let conf = load_file(conf_data.file.try_clone()?, opts.large_config)?;
     let state = Arc::from(ArcSwap::from_pointee(State {
@@ -100,11 +97,10 @@ fn cache_routes(groups: Vec<RouteGroup>) -> HashMap<String, Route> {
     for group in groups {
         for (kw, dest) in group.routes {
             // This function isn't called often enough to not be a performance issue.
-            match mapping.insert(kw.clone(), dest.clone()) {
-                None => trace!("Inserting {kw} into mapping."),
-                Some(old_value) => {
-                    trace!("Overriding {kw} route from {old_value} to {dest}.");
-                }
+            if let Some(old_value) = mapping.insert(kw.clone(), dest.clone()) {
+                trace!("Overriding {kw} route from {old_value} to {dest}.");
+            } else {
+                trace!("Inserting {kw} into mapping.");
             }
         }
     }

@@ -18,7 +18,7 @@ const LARGE_FILE_SIZE_THRESHOLD: u64 = 100_000_000;
 #[cfg(test)]
 const LARGE_FILE_SIZE_THRESHOLD: u64 = 1_000_000;
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Eq)]
 pub struct Config {
     pub bind_address: String,
     pub public_address: String,
@@ -26,7 +26,7 @@ pub struct Config {
     pub groups: Vec<RouteGroup>,
 }
 
-#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
+#[derive(Deserialize, Serialize, Debug, Eq, PartialEq, Clone)]
 pub struct RouteGroup {
     pub name: String,
     pub description: Option<String>,
@@ -35,7 +35,7 @@ pub struct RouteGroup {
     pub routes: HashMap<String, Route>,
 }
 
-#[derive(Debug, PartialEq, Clone, Serialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize)]
 pub struct Route {
     pub route_type: RouteType,
     pub path: String,
@@ -211,7 +211,7 @@ fn get_route_type(path: &str) -> RouteType {
 
 /// There exists two route types: an external path (e.g. a URL) or an internal
 /// path (to a file).
-#[derive(Debug, PartialEq, Clone, Serialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize)]
 pub enum RouteType {
     External,
     Internal,
@@ -288,7 +288,7 @@ pub fn get_config_data() -> Result<FileData, BunBunError> {
                 });
             }
             Err(e) => {
-                debug!("Tried to open a new file at '{location:?}' but failed due to error: {e}",)
+                debug!("Tried to open a new file at '{location:?}' but failed due to error: {e}");
             }
         }
     }

@@ -153,14 +153,11 @@ fn resolve_hop<'a>(
     default_route: Option<&str>,
 ) -> RouteResolution<'a> {
     let mut split_args = query.split_ascii_whitespace().peekable();
-    let maybe_route = {
-        match split_args.peek() {
-            Some(command) => routes.get(*command),
-            None => {
-                debug!("Found empty query, returning no route.");
-                return RouteResolution::Unresolved;
-            }
-        }
+    let maybe_route = if let Some(command) = split_args.peek() {
+        routes.get(*command)
+    } else {
+        debug!("Found empty query, returning no route.");
+        return RouteResolution::Unresolved;
     };
 
     let args = split_args.collect::<Vec<_>>();
@@ -177,13 +174,11 @@ fn resolve_hop<'a>(
     }
 
     // Try resolving with the default route, if it exists
-    if let Some(route) = default_route {
-        if let Some(route) = routes.get(route) {
-            if check_route(route, arg_count) {
-                let args = args.join(" ");
-                debug!("Using default route {route} with args {args}");
-                return RouteResolution::Resolved { route, args };
-            }
+    if let Some(route) = default_route.and_then(|route| routes.get(route)) {
+        if check_route(route, arg_count) {
+            let args = args.join(" ");
+            debug!("Using default route {route} with args {args}");
+            return RouteResolution::Resolved { route, args };
         }
     }
 
